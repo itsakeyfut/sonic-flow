@@ -242,3 +242,14 @@ pub trait ErrorRecovery {
     /// Attempt to recover from the error
     fn recover(&mut self, error: Self::Error) -> std::result::Result<(), Self::Error>;
 }
+
+/// Erro severity levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorSeverity {
+    /// Warning - operation can continue with degraded functionality
+    Warning,
+    /// Error - operation failed but application can recover
+    Error,
+    /// Critical - application state is compromised
+    Critical,
+}
