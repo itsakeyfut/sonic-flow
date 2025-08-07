@@ -42,6 +42,9 @@
     clippy::cast_possible_wrap,
 )]
 
+// Re-exports for public API
+pub use error::{Error, Result};
+
 // Core modules
 pub mod error;
 
