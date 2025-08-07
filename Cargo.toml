@@ -122,3 +122,7 @@ debug = true
 
 [workspace]
 # members = ["plugins/*"]
+
+[package.metadata.docs.rs]
+features = ["renderer-winit-femtovg", "backend-winit"]
+rustdoc-args = ["--cfg", "docsrs"]
