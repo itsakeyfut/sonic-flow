@@ -1,10 +1,10 @@
-# CLAUDE.md - Resonance Player プロジェクト文脈
+# CLAUDE.md - Sonic Flow プロジェクト文脈
 
-このファイルは、Resonance Player プロジェクトに関する Claude への指示と文脈情報を含みます。
+このファイルは、Sonic Flow プロジェクトに関する Claude への指示と文脈情報を含みます。
 
 ## 🎯 プロジェクト概要
 
-**プロジェクト名**: Resonance Player  
+**プロジェクト名**: Sonic Flow  
 **技術スタック**: Rust + Slint  
 **目標**: リリースレベル品質の音圧ビジュアライザー重視ミュージックプレイヤー  
 **開発ステータ**: 設計フェーズ完了、実装開始準備中

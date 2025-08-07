@@ -1,4 +1,4 @@
-# Resonance Player - ディレクトリ構成ガイド
+# Sonic Flow - ディレクトリ構成ガイド
 
 ## 📋 目次
 
