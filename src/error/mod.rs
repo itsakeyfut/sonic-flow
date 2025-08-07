@@ -103,3 +103,23 @@ pub enum DecoderError {
     #[error("End of stream")]
     EndOfStream,
 }
+
+/// Database related errors
+#[derive(Error, Debug)]
+pub enum DatabaseError {
+    /// Database connection error
+    #[error("Connection error: {0}")]
+    Connection(#[from] sqlx::Error),
+
+    /// Migration error
+    #[error("Migration error: {0}")]
+    Migration(String),
+
+    /// Query execution error
+    #[error("Query error: {0}")]
+    Query(String),
+
+    /// Data consistency error
+    #[error("Data consistency error: {0}")]
+    Consistency(String),
+}
