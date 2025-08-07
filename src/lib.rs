@@ -41,3 +41,14 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap,
 )]
+
+// Type aliases for commonly used types
+pub use uuid::Uuid;
+pub use chrono::{DateTime, Utc};
+
+/// Application-wide type aliases
+pub type TrackId = Uuid;
+/// Playlist identifier
+pub type PlaylistId = Uuid;
+/// Plugin identifier  
+pub type PluginId = String;
