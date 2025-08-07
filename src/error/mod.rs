@@ -123,3 +123,27 @@ pub enum DatabaseError {
     #[error("Data consistency error: {0}")]
     Consistency(String),
 }
+
+/// Configuration related errors
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    /// Configuration file not found
+    #[error("Configuration file not found: {path}")]
+    FileNotFound { path: String },
+
+    /// Invalid configuration format
+    #[error("Invalid configuration format: {0}")]
+    InvalidFormat(#[from] toml::de::Error),
+
+    /// Missing required configuration
+    #[error("Missing required configuration: {key}")]
+    MissingRequired { key: String },
+
+    /// Invalid configuration value
+    #[error("Invalid configuration value for {key}: {value}")]
+    InvalidState { key: String, value: String },
+
+    /// Configuration serialization error
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] toml::ser::Error),
+}
