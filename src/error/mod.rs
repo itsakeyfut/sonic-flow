@@ -280,3 +280,44 @@ pub enum ErrorSeverity {
     /// Critical - application state is compromised
     Critical,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_chain() {
+        let decoder_error = DecoderError::InitializationFailed {
+            format: "mp3".to_string(),
+        };
+        let audio_error = AudioError::Decoder(decoder_error);
+        let app_error = Error::Audio(audio_error);
+
+        assert!(matches!(app_error, Error::Audio(AudioError::Decoder(_))));
+    }
+
+    #[test]
+    fn test_error_recovery_classification() {
+        let recoverable = Error::Audio(AudioError::BufferUnderrun);
+        assert!(recoverable.is_recoverable());
+
+        let non_recoverable = Error::Audio(AudioError::UnsupportedFormat {
+            format: "unknown".to_string(),
+        });
+        assert!(!non_recoverable.is_recoverable());
+    }
+
+    #[test]
+    fn test_error_severity() {
+        let warning_error = Error::Plugin {
+            plugin: "test".to_string(),
+            message: "test error".to_string(),
+        };
+        assert_eq!(warning_error.severity(), ErrorSeverity::Warning);
+
+        let critical_error = Error::Database(DatabaseError::Consistency(
+            "data corruption".to_string(),
+        ));
+        assert_eq!(critical_error.severity(), ErrorSeverity::Critical);
+    }
+}
