@@ -167,3 +167,23 @@ pub enum UiError {
     #[error("Event handling error: {0}")]
     EventHandling(String),
 }
+
+/// Playlist management errors
+#[derive(Error, Debug)]
+pub enum PlaylistError {
+    /// Playlist not found
+    #[error("Playlist not found: {id}")]
+    NotFound { id: crate::PlaylistId },
+
+    /// Track not in playlist
+    #[error("Track not in playlist: {track_id}")]
+    TrackNotFound { track_id: crate::TrackId },
+
+    /// Invalid playlist format
+    #[error("Invalid playlist format: {0}")]
+    InvalidFormat(String),
+
+    /// Playlist operation failed
+    #[error("Playlist operation failed: {0}")]
+    OperationFailed(String),
+}
