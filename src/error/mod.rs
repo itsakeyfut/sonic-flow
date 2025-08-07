@@ -147,3 +147,23 @@ pub enum ConfigError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] toml::ser::Error),
 }
+
+/// UI related errors
+#[derive(Error, Debug)]
+pub enum UiError {
+    /// Slint compilation error
+    #[error("Slint compilation error: {0}")]
+    SlintCompilation(String),
+
+    /// Component not found
+    #[error("Component not found: {component}")]
+    ComponentNotFound { component: String },
+
+    /// Theme loading error
+    #[error("Theme loading error: {0}")]
+    ThemeLoading(String),
+
+    /// UI event handling error
+    #[error("Event handling error: {0}")]
+    EventHandling(String),
+}
