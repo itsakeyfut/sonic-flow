@@ -243,6 +243,21 @@ pub trait ErrorRecovery {
     fn recover(&mut self, error: Self::Error) -> std::result::Result<(), Self::Error>;
 }
 
+/// Utility functinos for error handling
+impl Error {
+    /// Check if this error is recoverable
+    pub fn is_recoverable(&self) -> bool {
+        match self {
+            Error::Audio(AudioError::BufferUnderrun) => true,
+            Error::Audio(AudioError::Device(_)) => true,
+            Error::Database(DatabaseError::Connection(_)) => true,
+            Error::Io(e) if e.kind() == std::io::ErrorKind::Interrupted => true,
+            Error::Plugin { .. } => true, // Plugin errors are isolated
+            _ => false,
+        }
+    }
+}
+
 /// Erro severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {
