@@ -119,3 +119,6 @@ debug = true
 # [[bench]]
 # name = "visualizer_render"
 # harness = false
+
+[workspace]
+# members = ["plugins/*"]
