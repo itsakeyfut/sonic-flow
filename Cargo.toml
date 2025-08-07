@@ -104,3 +104,18 @@ strip = "symbols"
 [profile.dev]
 debug = true
 opt-level = 0
+
+[profile.bench]
+debug = true
+
+# [[bench]]
+# name = "fft_performance"
+# harness = false
+
+# [[bench]]
+# name = "audio_processing"
+# harness = false
+
+# [[bench]]
+# name = "visualizer_render"
+# harness = false
