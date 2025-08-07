@@ -227,3 +227,6 @@ pub enum VisualizerError {
     #[error("Performance constraint violation: {constraint}")]
     PerformanceViolation { constraint: String },
 }
+
+/// Specialized Result type for the application
+pub type Result<T> = std::result::Result<T, Error>;
