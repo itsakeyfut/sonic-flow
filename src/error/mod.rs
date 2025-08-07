@@ -230,3 +230,15 @@ pub enum VisualizerError {
 
 /// Specialized Result type for the application
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Trait for error recovery strategies
+pub trait ErrorRecovery {
+    /// The error type this recovery strategy handles
+    type Error;
+
+    /// Check if the error can be recovered from
+    fn can_recover(&self, error: &Self::Error) -> bool;
+
+    /// Attempt to recover from the error
+    fn recover(&mut self, error: Self::Error) -> std::result::Result<(), Self::Error>;
+}
