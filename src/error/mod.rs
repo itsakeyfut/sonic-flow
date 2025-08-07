@@ -51,3 +51,35 @@ pub enum Error {
     #[error("Application error: {0}")]
     Application(String),
 }
+
+/// Audio engine specific errors
+#[derive(Error, Debug)]
+pub enum AudioError {
+    /// Audio decoder related errors
+    #[error("Decoder error: {0}")]
+    Decoder(#[from] DecoderError),
+
+    /// Audio device related errors
+    #[error("Device error: {0}")]
+    Device(String),
+
+    /// Unsupported audio format
+    #[error("Format not supported: {format}")]
+    UnsupportedFormat { format: String },
+
+    /// Audio buffer underrun
+    #[error("Buffer underrun")]
+    BufferUnderrun,
+
+    /// Invalid state transition
+    #[error("Invalid state transition: {from} -> {to}")]
+    InvalidState { from: String, to: String },
+
+    /// Audio streaming error
+    #[error("Streaming error: {0}")]
+    Streaming(String),
+
+    /// Effects processing error
+    #[error("Effects processing error: {0}")]
+    Effects(String),
+}
