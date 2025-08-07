@@ -83,3 +83,23 @@ pub enum AudioError {
     #[error("Effects processing error: {0}")]
     Effects(String),
 }
+
+/// Audio decoder specific errors
+#[derive(Error, Debug)]
+pub enum DecoderError {
+    /// Failed to initialize decoder
+    #[error("Failed to initialize decoder for format: {format}")]
+    InitializationFailed { format: String },
+
+    /// Corrupted audio data
+    #[error("Corrupted audio data: {0}")]
+    CorruptedData(String),
+
+    ///Seek operation failed
+    #[error("Seek operation failed: {0}")]
+    SeekFailed(String),
+
+    /// End of stream reached
+    #[error("End of stream")]
+    EndOfStream,
+}
