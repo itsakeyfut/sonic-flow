@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Sonic Flow Team"]
 description = "A high-quality music player with advanced audio spectrum visualizers"
-license = "MIT"
 repository = "https://github.com/itsakeyfut/sonic-flow"
 keywords = ["audio", "music", "visualizer", "player", "slint"]
 categories = ["multimedia::audio", "gui"]
