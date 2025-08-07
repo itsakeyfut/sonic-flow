@@ -207,3 +207,23 @@ pub enum LibraryError {
     #[error("File watch error: {0}")]
     FileWatch(#[from] notify::Error),
 }
+
+/// Visualizer related errors
+#[derive(Error, Debug)]
+pub enum VisualizerError {
+    /// Plugin not found
+    #[error("Visualizer plugin not found: {name}")]
+    PluginNotFound { name: String },
+
+    /// Rendering error
+    #[error("Rendering error: {0}")]
+    Rendering(String),
+
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
+    /// Performance constraint violation
+    #[error("Performance constraint violation: {constraint}")]
+    PerformanceViolation { constraint: String },
+}
