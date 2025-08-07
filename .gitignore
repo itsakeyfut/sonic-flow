@@ -1,0 +1,12 @@
+# Rust build artifacts
+/target
+Cargo.lock
+.cargo
+
+# Media files
+/assets
+
+# Credentials
+/memos
+
+.vscode/settings.json
