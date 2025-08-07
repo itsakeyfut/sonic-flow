@@ -187,3 +187,23 @@ pub enum PlaylistError {
     #[error("Playlist operation failed: {0}")]
     OperationFailed(String),
 }
+
+/// Library management errors
+#[derive(Error, Debug)]
+pub enum LibraryError {
+    /// Track not found in library
+    #[error("Track not found: {id}")]
+    TrackNotFound { id: crate::TrackId },
+
+    /// Metadata extraction failed
+    #[error("Metadata extraction failed: {0}")]
+    MetadataExtraction(String),
+
+    /// Library scan failed
+    #[error("Library scan failed: {0}")]
+    ScanFailed(String),
+
+    /// File watch error
+    #[error("File watch error: {0}")]
+    FileWatch(#[from] notify::Error),
+}
