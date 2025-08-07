@@ -42,6 +42,9 @@
     clippy::cast_possible_wrap,
 )]
 
+// Core modules
+pub mod error;
+
 // Type aliases for commonly used types
 pub use uuid::Uuid;
 pub use chrono::{DateTime, Utc};
