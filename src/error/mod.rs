@@ -256,6 +256,18 @@ impl Error {
             _ => false,
         }
     }
+
+    /// Get error severity level
+    pub fn severity(&self) -> ErrorSeverity {
+        match self {
+            Error::Audio(AudioError::BufferUnderrun) => ErrorSeverity::Warning,
+            Error::Audio(AudioError::UnsupportedFormat { .. }) => ErrorSeverity::Error,
+            Error::Database(DatabaseError::Consistency(_)) => ErrorSeverity::Critical,
+            Error::Config(ConfigError::FileNotFound { .. }) => ErrorSeverity::Warning,
+            Error::Plugin { .. } => ErrorSeverity::Warning,
+            _ => ErrorSeverity::Error,
+        }
+    }
 }
 
 /// Erro severity levels
