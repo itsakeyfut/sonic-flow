@@ -386,4 +386,29 @@ impl AudioEngineWorker {
         info!("Track loaded successfully: {} (ID: {})", path.display(), track_id);
         Ok(track_id)
     }
+
+    /// Handle set current track command
+    async fn handle_set_current_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
+        // Verify track exists
+        if !self.tracks.read().contains_key(&track_id) {
+            return Err(AudioError::InvalidState {
+                from: "unknown track".to_string(),
+                to: "current track".to_string(),
+            });
+        }
+
+        // Stop current playback
+        if let Some(sink) = self.sink.take() {
+            sink.stop();
+        }
+
+        // Update status
+        let mut status = self.status.write();
+        status.current_track = Some(track_id);
+        status.state = PlaybackState::Stopped;
+        status.position = Duration::ZERO;
+        
+        debug!("Current track set to: {}", track_id);
+        Ok(())
+    }
 }
