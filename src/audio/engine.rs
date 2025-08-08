@@ -298,4 +298,17 @@ impl AudioEngineWorker {
         debug!("Playback stopped");
         Ok(())
     }
+
+    /// Handle seek command
+    async fn handle_seek(&mut self, position: Duration) -> Result<(), AudioError> {
+        // Seeking in rodio requires recreating the sink
+        // This is a limitation of the current implementation
+        warn!("Seeking not yet implemented - requires sink recreation");
+        
+        // For now, just update the position in status
+        // TODO: Implement proper seeking by recreating the sink at the target position
+        self.status.write().position = position;
+        
+        Ok(())
+    }
 }
