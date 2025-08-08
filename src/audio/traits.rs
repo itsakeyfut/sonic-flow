@@ -63,3 +63,34 @@ pub trait PlaybackControl: Send + Sync {
     /// Returns `AudioError` if there is no previous track or the operation fails.
     async fn previous_track(&mut self) -> Result<(), AudioError>;
 }
+
+/// Volume control interface
+pub trait VolumeControl: Send + Sync {
+    /// Set the playback volume
+    /// 
+    /// # Arguments
+    /// 
+    /// * `volume` - Volume level between 0.0 (silent) and 1.0 (maximum)
+    fn set_volume(&mut self, volume: f32);
+
+    /// Get the current volume level
+    /// 
+    /// # Returns
+    /// 
+    /// Current volume as a value between 0.0 and 1.0
+    fn volume(&self) -> f32;
+
+    /// Mute or unmute audio output
+    /// 
+    /// # Arguments
+    /// 
+    /// * `muted` - True to mute, false to unmute
+    fn set_muted(&mut self, muted: bool);
+
+    /// Check if audio is currently muted
+    /// 
+    /// # Returns
+    /// 
+    /// True if audio is muted, false otherwise
+    fn is_muted(&self) -> bool;
+}
