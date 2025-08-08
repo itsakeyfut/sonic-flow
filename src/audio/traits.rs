@@ -94,3 +94,40 @@ pub trait VolumeControl: Send + Sync {
     /// True if audio is muted, false otherwise
     fn is_muted(&self) -> bool;
 }
+
+/// Track loading and management interface
+#[async_trait]
+pub trait TrackLoader: Send + Sync {
+    /// Load a track from a file path
+    /// 
+    /// # Arguments
+    /// 
+    /// * `path` - Path to the audio file
+    /// 
+    /// # Returns
+    /// 
+    /// Track ID that can be used for playback operations
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AudioError` if the file cannot be loaded or is in an unsupported format.
+    async fn load_track(&mut self, path: &Path) -> Result<TrackId, AudioError>;
+
+    /// Set the current track for playback
+    /// 
+    /// # Arguments
+    /// 
+    /// * `track_id` - ID of the track to set as current
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AudioError` if the track ID is invalid
+    async fn set_current_track(&mut self, track_id: TrackId) -> Result<(), AudioError>;
+
+    /// Get the currently loaded track ID
+    /// 
+    /// # Returns
+    /// 
+    /// Current track ID, or None if no track is loaded
+    fn current_track(&self) -> Option<TrackId>;
+}
