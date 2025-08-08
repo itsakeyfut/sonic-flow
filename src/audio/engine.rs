@@ -284,4 +284,18 @@ impl AudioEngineWorker {
         }
         Ok(())
     }
+
+    /// Handle stop command
+    async fn handle_stop(&mut self) -> Result<(), AudioError> {
+        if let Some(sink) = self.sink.take() {
+            sink.stop();
+        }
+        
+        let mut status = self.status.write();
+        status.state = PlaybackState::Stopped;
+        status.position = Duration::ZERO;
+        
+        debug!("Playback stopped");
+        Ok(())
+    }
 }
