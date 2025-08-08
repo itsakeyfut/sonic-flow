@@ -1,12 +1,97 @@
 # Rust build artifacts
-/target
+/target/
 Cargo.lock
-.cargo
+.cargo/
+**/*.rs.bk
 
-# Media files
-/assets
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Credentials
-/memos
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.tmp
 
-.vscode/settings.json
+# Application specific
+# Media files (for testing)
+/assets/test_audio/
+/assets/fixtures/
+
+# Configuration files (contain user data)
+/config/
+*.toml
+!Cargo.toml
+!config/default.toml
+
+# Logs
+/logs/
+*.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+/tmp/
+*.temp
+
+# Plugin development
+/plugins/*/target/
+
+# Documentation build
+/docs/build/
+
+# Benchmark results  
+/benches/results/
+
+# Coverage reports
+/coverage/
+*.profraw
+
+# Cache directories
+.cache/
+
+# Runtime directories
+/runtime/
+
+# User data
+/playlists/
+/library.db
+
+# Credentials and secrets
+.env
+.env.local
+/memos/
+
+# Platform specific
+# Windows
+*.exe
+*.pdb
+
+# macOS
+*.dSYM/
+
+# Linux
+*.so
+*.so.*
+
+# Development tools
+.pre-commit-config.yaml
+
+# Profiling
+*.prof
+perf.data*
+
+# Fuzzing
+/fuzz/target/
+/fuzz/artifacts/
