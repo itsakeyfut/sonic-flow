@@ -37,3 +37,18 @@ pub struct TrackInfo {
     /// File size in bytes
     pub file_size: u64,
 }
+
+/// Audio engine commands for async communication
+#[derive(Debug)]
+enum AudioCommand {
+    Play,
+    Pause,
+    Stop,
+    Seek(Duration),
+    SetVolume(f32),
+    SetMuted(bool),
+    LoadTrack(PathBuf, oneshot::Sender<Result<TrackId, AudioError>>),
+    SetCurrentTrack(TrackId, oneshot::Sender<Result<(), AudioError>>),
+    GetStatus(oneshot::Sender<AudioEngineStatus>),
+    Shutdown,
+}
