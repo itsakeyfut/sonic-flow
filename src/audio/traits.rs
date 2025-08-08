@@ -250,3 +250,17 @@ pub enum AudioFormatType {
     /// Unknown or unsupported format
     Unknown(String),
 }
+
+impl AudioFormatType {
+    /// Create format type from file extension
+    pub fn from_extension(ext: &str) -> Self {
+        match ext.to_lowercase().as_str() {
+            "mp3" => Self::Mp3,
+            "flac" => Self::Flac,
+            "wav" => Self::Wav,
+            "ogg" => Self::Ogg,
+            "aac" | "m4a" => Self::Aac,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
+}
