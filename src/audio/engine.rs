@@ -158,4 +158,19 @@ impl AudioEngine {
             .send(command)
             .map_err(|_| AudioError::Device("Audio engine not available".to_string()))
     }
+
+    /// Send a command and wait for a response
+    async fn send_command_with_response<T, F>(&self, command_factory: F) -> Result<T, AudioError>
+    where
+        F: FnOnce(oneshot::Sender<T>) -> AudioCommand,
+    {
+        let (response_sender, response_receiver) = oneshot::channel();
+        let command = command_factory(response_sender);
+
+        self.send_command(command).await?;
+
+        response_receiver
+            .await
+            .map_err(|_| AudioError::Device("Failed to receive response from audio engine".to_string()))
+    }
 }
