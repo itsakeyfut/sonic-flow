@@ -220,3 +220,33 @@ pub trait AudioDecoder: Send + Sync {
     /// Check if the decoder supports seeking
     fn supports_seek(&self) -> bool;
 }
+
+/// Audio format information
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudioFormat {
+    /// Sample rate in Hz
+    pub sample_rate: u32,
+    /// Number of channels (1 for mono, 2 for stereo)
+    pub channels: u16,
+    /// Bit depth (16, 24, etc.)
+    pub bit_depth: u16,
+    /// Audio format type
+    pub format_type: AudioFormatType,
+}
+
+/// Supported audio format types
+#[derive(Debug, Clone, PartialEq)]
+pub enum AudioFormatType {
+    /// MP3 format
+    Mp3,
+    /// FLAC lossless format
+    Flac,
+    /// WAV uncompressed format
+    Wav,
+    /// OGG Vorbis format
+    Ogg,
+    /// AAC format
+    Aac,
+    /// Unknown or unsupported format
+    Unknown(String),
+}
