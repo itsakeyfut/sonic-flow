@@ -131,3 +131,18 @@ pub trait TrackLoader: Send + Sync {
     /// Current track ID, or None if no track is loaded
     fn current_track(&self) -> Option<TrackId>;
 }
+
+/// Playback state information
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlaybackState {
+    /// No track loaded or playback stopped
+    Stopped,
+    /// Playback is active
+    Playing,
+    /// Playback is paused
+    Paused,
+    /// Buffering or loading
+    Buffering,
+    /// Error state
+    Error(String),
+}
