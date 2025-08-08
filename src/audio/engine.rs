@@ -151,4 +151,11 @@ impl AudioEngine {
             tracks,
         })
     }
+
+    /// Send a command to the audio engine worker
+    async fn send_command(&self, command: AudioCommand) -> Result<(), AudioError> {
+        self.command_sender
+            .send(command)
+            .map_err(|_| AudioError::Device("Audio engine not available".to_string()))
+    }
 }
