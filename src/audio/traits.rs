@@ -281,3 +281,34 @@ impl AudioFormatType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_audio_format_type_from_extension() {
+        assert_eq!(AudioFormatType::from_extension("mp3"), AudioFormatType::Mp3);
+        assert_eq!(AudioFormatType::from_extension("MP3"), AudioFormatType::Mp3);
+        assert_eq!(AudioFormatType::from_extension("flac"), AudioFormatType::Flac);
+        assert_eq!(AudioFormatType::from_extension("wav"), AudioFormatType::Wav);
+        assert_eq!(AudioFormatType::from_extension("unknown"), 
+                   AudioFormatType::Unknown("unknown".to_string()));
+    }
+
+    #[test]
+    fn test_audio_format_type_is_supported() {
+        assert!(AudioFormatType::Mp3.is_supported());
+        assert!(AudioFormatType::Flac.is_supported());
+        assert!(!AudioFormatType::Unknown("xyz".to_string()).is_supported());
+    }
+
+    #[test]
+    fn test_playback_state_helpers() {
+        let state = PlaybackState::Playing;
+        assert!(matches!(state, PlaybackState::Playing));
+        
+        let state = PlaybackState::Stopped;
+        assert!(matches!(state, PlaybackState::Stopped));
+    }
+}
