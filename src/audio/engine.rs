@@ -503,3 +503,20 @@ impl VolumeControl for AudioEngine {
         self.status.read().is_muted
     }
 }
+
+#[async_trait]
+impl TrackLoader for AudioEngine {
+    async fn load_track(&mut self, path: &Path) -> Result<TrackId, AudioError> {
+        self.send_command_with_response(|sender| AudioCommand::LoadTrack(path.to_path_buf(), sender))
+            .await
+    }
+
+    async fn set_current_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
+        self.send_command_with_response(|sender| AudioCommand::SetCurrentTrack(track_id, sender))
+            .await
+    }
+
+    fn current_track(&self) -> Option<TrackId> {
+        self.status.read().current_track
+    }
+}
