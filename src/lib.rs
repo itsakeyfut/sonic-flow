@@ -46,6 +46,7 @@
 pub use error::{Error, Result};
 
 // Core modules
+pub mod app;
 pub mod error;
 
 // Type aliases for commonly used types
