@@ -485,3 +485,21 @@ impl PlaybackControl for AudioEngine {
         Ok(())
     }
 }
+
+impl VolumeControl for AudioEngine {
+    fn set_volume(&mut self, volume: f32) {
+        let _ = self.command_sender.send(AudioCommand::SetVolume(volume));
+    }
+
+    fn volume(&self) -> f32 {
+        self.status.read().volume
+    }
+
+    fn set_muted(&mut self, muted: bool) {
+        let _ = self.command_sender.send(AudioCommand::SetMuted(muted));
+    }
+
+    fn is_muted(&self) -> bool {
+        self.status.read().is_muted
+    }
+}
