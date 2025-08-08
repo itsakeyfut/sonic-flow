@@ -263,4 +263,9 @@ impl AudioFormatType {
             other => Self::Unknown(other.to_string()),
         }
     }
+
+    /// Check if the format is supported
+    pub fn is_supported(&self) -> bool {
+        !matches!(self, Self::Unknown(_))
+    }
 }
