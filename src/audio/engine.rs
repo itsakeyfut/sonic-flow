@@ -311,4 +311,18 @@ impl AudioEngineWorker {
         
         Ok(())
     }
+
+    /// Handle set volume command
+    async fn handle_set_volume(&mut self, volume: f32) -> Result<(), AudioError> {
+        let clamped_volume = volume.clamp(0.0, 1.0);
+        
+        if let Some(ref sink) = self.sink {
+            sink.set_volume(clamped_volume);
+        }
+        
+        self.status.write().volume = clamped_volume;
+        debug!("Volume set to {}", clamped_volume);
+        
+        Ok(())
+    }
 }
