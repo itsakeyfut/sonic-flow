@@ -100,3 +100,55 @@ struct AudioEngineWorker {
     /// Command receiver
     command_receiver: mpsc::UnboundedReceiver<AudioCommand>,
 }
+
+impl AudioEngine {
+    /// Create a new audio engine instance
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AudioError` if the audio system cannot be initialized.
+    pub fn new() -> Result<Self, AudioError> {
+        info!("Initializing audio engine");
+
+        // Create communication channels
+        let (command_sender, command_receiver) = mpsc::unbounded_channel();
+
+        // Initialize shared state
+        let status = Arc::new(RwLock::new(AudioEngineStatus {
+            state: PlaybackState::Stopped,
+            position: Duration::ZERO,
+            duration: None,
+            volume: 0.8,
+            is_muted: false,
+            current_track: None,
+        }));
+
+        let tracks = Arc::new(RwLock::new(HashMap::new()));
+
+        // Spawn the audio processing thread
+        let worker_status = Arc::clone(&status);
+        let worker_tracks = Arc::clone(&tracks);
+
+        let audio_thread = tokio::spawn(async move {
+            let worker = AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
+
+            match worker {
+                Ok(mut worker) => {
+                    worker.run().await;
+                }
+                Err(e) => {
+                    error!("Failed to initialize audio worker: {}", e);
+                }
+            }
+        });
+
+        debug!("Audio engine initialized successfully");
+
+        Ok(Self {
+            command_sender,
+            _audio_thread: audio_thread,
+            status,
+            tracks,
+        })
+    }
+}
