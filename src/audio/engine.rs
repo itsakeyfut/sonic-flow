@@ -69,3 +69,18 @@ pub struct AudioEngineStatus {
     /// Currently loaded track
     pub current_track: Option<TrackId>,
 }
+
+/// Main audio engine implementation
+/// 
+/// The AudioEngine manages audio playback using rodio for cross-platform
+/// audio support. It runs on a dedicated thread to avoid blocking the UI.
+pub struct AudioEngine {
+    /// Command sender for communicating with the audio thread
+    command_sender: mpsc::UnboundedSender<AudioCommand>,
+    /// Handle to the audio processing thread
+    _audio_thread: tokio::task::JoinHandle<()>,
+    /// Shared status information
+    status: Arc<RwLock<AudioEngineStatus>>,
+    /// Track information cache
+    tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
+}
