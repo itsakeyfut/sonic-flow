@@ -534,3 +534,10 @@ impl PlaybackStatus for AudioEngine {
         self.status.read().duration
     }
 }
+
+impl Drop for AudioEngine {
+    fn drop(&mut self) {
+        // Send shutdown command to cleanup resources
+        let _ = self.command_sender.send(AudioCommand::Shutdown);
+    }
+}
