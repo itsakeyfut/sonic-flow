@@ -248,4 +248,30 @@ impl AudioEngineWorker {
             }
         }
     }
+
+    /// Handle play command
+    async fn handle_play(&mut self) -> Result<(), AudioError> {
+        if let Some(ref sink) = self.sink {
+            sink.play();
+            self.status.write().state = PlaybackState::Playing;
+            debug!("Playback resumed");
+        } else {
+            // No sink available, try to create one for the current track
+            let current_track = self.status.read().current_track;
+            if let Some(track_id) = current_track {
+                self.create_sink_for_track(track_id).await?;
+                if let Some(ref sink) = self.sink {
+                    sink.play();
+                    self.status.write().state = PlaybackState::Playing;
+                    debug!("Playback started");
+                }
+            } else {
+                return Err(AudioError::InvalidState {
+                    from: "no track loaded".to_string(),
+                    to: "playing".to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
 }
