@@ -215,4 +215,37 @@ impl AudioEngineWorker {
 
         debug!("Audio engine worker shutting down");
     }
+
+    /// Handle a single audio command
+    async fn handle_command(&mut self, command: AudioCommand) -> Result<(), AudioError> {
+        match command {
+            AudioCommand::Play => self.handle_play().await,
+            AudioCommand::Pause => self.handle_pause().await,
+            AudioCommand::Stop => self.handle_stop().await,
+            AudioCommand::Seek(position) => self.handle_seek(position).await,
+            AudioCommand::SetVolume(volume) => self.handle_set_volume(volume).await,
+            AudioCommand::SetMuted(muted) => self.handle_set_muted(muted).await,
+            AudioCommand::LoadTrack(path, response) => {
+                let result = self.handle_load_track(&path).await;
+                let _ = response.send(result);
+                Ok(())
+            }
+            AudioCommand::SetCurrentTrack(track_id, response) => {
+                let result = self.handle_set_current_track(track_id).await;
+                let _ = response.send(result);
+                Ok(())
+            }
+            AudioCommand::GetStatus(response) => {
+                let status = self.status.read().clone();
+                let _ = response.send(status);
+                Ok(())
+            }
+            AudioCommand::Shutdown => {
+                if let Some(sink) = self.sink.take() {
+                    sink.stop();
+                }
+                Ok(())
+            }
+        }
+    }
 }
