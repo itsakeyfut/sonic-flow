@@ -274,4 +274,14 @@ impl AudioEngineWorker {
         }
         Ok(())
     }
+
+    /// Handle pause command
+    async fn handle_pause(&mut self) -> Result<(), AudioError> {
+        if let Some(ref sink) = self.sink {
+            sink.pause();
+            self.status.write().state = PlaybackState::Paused;
+            debug!("Playback paused");
+        }
+        Ok(())
+    }
 }
