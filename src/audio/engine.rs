@@ -22,3 +22,18 @@ use super::traits::{
     AudioFormat, AudioFormatType, PlaybackControl, PlaybackState, PlaybackStatus, TrackLoader,
     VolumeControl,
 };
+
+/// Track information stored in the engine
+#[derive(Debug, Clone)]
+pub struct TrackInfo {
+    /// Unique track identifier
+    pub id: TrackId,
+    /// File path to the audio file
+    pub path: PathBuf,
+    /// Audio format information
+    pub format: AudioFormat,
+    /// Track duration (if available)
+    pub duration: Option<Duration>,
+    /// File size in bytes
+    pub file_size: u64,
+}
