@@ -454,3 +454,34 @@ impl AudioEngineWorker {
         Ok(())
     }
 }
+
+#[async_trait]
+impl PlaybackControl for AudioEngine {
+    async fn play(&mut self) -> Result<(), AudioError> {
+        self.send_command(AudioCommand::Play).await
+    }
+
+    async fn pause(&mut self) -> Result<(), AudioError> {
+        self.send_command(AudioCommand::Pause).await
+    }
+
+    async fn stop(&mut self) -> Result<(), AudioError> {
+        self.send_command(AudioCommand::Stop).await
+    }
+
+    async fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
+        self.send_command(AudioCommand::Seek(position)).await
+    }
+
+    async fn next_track(&mut self) -> Result<(), AudioError> {
+        // TODO: Implement track queue management
+        warn!("Next track not yet implemented - requires queue management");
+        Ok(())
+    }
+
+    async fn previous_track(&mut self) -> Result<(), AudioError> {
+        // TODO: Implement track queue management
+        warn!("Previous track not yet implemented - requires queue management");
+        Ok(())
+    }
+}
