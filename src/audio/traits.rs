@@ -268,4 +268,16 @@ impl AudioFormatType {
     pub fn is_supported(&self) -> bool {
         !matches!(self, Self::Unknown(_))
     }
+
+    /// Get the format name as a string
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Mp3 => "mp3",
+            Self::Flac => "flac", 
+            Self::Wav => "wav",
+            Self::Ogg => "ogg",
+            Self::Aac => "aac",
+            Self::Unknown(s) => s,
+        }
+    }
 }
