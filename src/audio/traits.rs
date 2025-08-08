@@ -181,3 +181,42 @@ pub trait PlaybackStatus: Send + Sync {
         matches!(self.state(), PlaybackState::Stopped)
     }
 }
+
+/// Audio decoder interface
+pub trait AudioDecoder: Send + Sync {
+    /// Decode audio data from the input buffer
+    /// 
+    /// # Arguments
+    /// 
+    /// * `input` - Encoded audio data
+    /// * `output` - Buffer to write decoded samples
+    /// 
+    /// # Returns
+    /// 
+    /// Number of samples written to the output buffer
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AudioError` if decoding fails
+    fn decode(&mut self, input: &[u8], output: &mut [f32]) -> Result<usize, AudioError>;
+
+    /// Get the sample rate of the decoded audio
+    fn sample_rate(&self) -> u32;
+
+    /// Get the number of audio channels
+    fn channels(&self) -> u16;
+
+    /// Seek to a specific position in the audio stream
+    /// 
+    /// # Arguments
+    /// 
+    /// * `position` - Target position as duration from the beginning
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AudioError` if seeking fails or is not supported
+    fn seek(&mut self, position: Duration) -> Result<(), AudioError>;
+
+    /// Check if the decoder supports seeking
+    fn supports_seek(&self) -> bool;
+}
