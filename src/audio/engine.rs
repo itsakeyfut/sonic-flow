@@ -338,4 +338,52 @@ impl AudioEngineWorker {
         
         Ok(())
     }
+
+    /// Handle load track command
+    async fn handle_load_track(&mut self, path: &Path) -> Result<TrackId, AudioError> {
+        debug!("Loading track: {}", path.display());
+
+        // Validate file exists and is readable
+        let metadata = tokio::fs::metadata(path)
+            .await
+            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
+                format: format!("File access error: {}", e),
+            }))?;
+
+        // Determine audio format from extension
+        let extension = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| AudioError::UnsupportedFormat {
+                format: "No file extension".to_string(),
+            })?;
+
+        let format_type = AudioFormatType::from_extension(extension);
+        if !format_type.is_supported() {
+            return Err(AudioError::UnsupportedFormat {
+                format: extension.to_string(),
+            });
+        }
+
+        // Create track info
+        let track_id = Uuid::new_v4();
+        let track_info = TrackInfo {
+            id: track_id,
+            path: path.to_path_buf(),
+            format: AudioFormat {
+                sample_rate: 44100, // Default, will be updated when decoding
+                channels: 2,        // Default, will be updated when decoding
+                bit_depth: 16,      // Default, will be updated when decoding
+                format_type,
+            },
+            duration: None, // Will be determined during decoding
+            file_size: metadata.len(),
+        };
+
+        // Store track info
+        self.tracks.write().insert(track_id, track_info);
+
+        info!("Track loaded successfully: {} (ID: {})", path.display(), track_id);
+        Ok(track_id)
+    }
 }
