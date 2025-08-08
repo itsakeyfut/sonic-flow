@@ -197,4 +197,22 @@ impl AudioEngineWorker {
             command_receiver,
         })
     }
+
+    /// Run the audio engine worker main loop
+    async fn run(&mut self) {
+        debug!("Audio engine worker started");
+
+        while let Some(command) = self.command_receiver.recv().await {
+            match self.handle_command(command).await {
+                Ok(()) => {}
+                Err(e) => {
+                    error!("Audio engine command failed: {}", e);
+                    // Update status to error state
+                    self.status.write().state = PlaybackState::Error(e.to_string());
+                }
+            }
+        }
+
+        debug!("Audio engine worker shutting down");
+    }
 }
