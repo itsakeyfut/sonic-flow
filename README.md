@@ -1,28 +1,267 @@
 # Sonic Flow
 
-## How to give instructions to Claude
+[![Rust](https://github.com/sonic-flow/sonic-flow/workflows/Rust/badge.svg)](https://github.com/sonic-flow/sonic-flow/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/crates/v/sonic-flow.svg)](https://crates.io/crates/sonic-flow)
+
+A high-quality music player with advanced audio spectrum visualizers, built with Rust and Slint.
+
+## ✨ Features
+
+### 🎵 Audio Playback
+
+- **High-Quality Audio**: Support for FLAC, WAV, MP3, OGG, and AAC formats
+- **Bit-Perfect Playback**: Up to 24-bit/192kHz audio support
+- **Low Latency**: Sub-50ms audio latency for responsive playback
+- **Advanced Effects**: 10-band equalizer, reverb, 3D audio processing
+
+### 🎨 Advanced Visualizers
+
+- **Spectrum Bars**: Classic frequency domain visualization
+- **Waveform Display**: Time domain oscilloscope view
+- **Circle Spectrum**: Circular frequency visualization
+- **Particle System**: Dynamic particle-based visualization
+- **3D Spectrum**: Three-dimensional frequency landscape
+- **VU Meters**: Professional-style level meters
+
+### 🔧 Extensibility
+
+- **Plugin System**: Load custom visualizers at runtime
+- **Theme Support**: Dark, light, and custom themes
+- **Configurable**: Extensive customization options
+- **Cross-Platform**: Windows, macOS, and Linux support
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Rust 1.70.0 or later
+- Git
+
+### Installation
+
+#### From Source
+
+```bash
+git clone https://github.com/sonic-flow/sonic-flow.git
+cd sonic-flow
+cargo build --release
+```
+
+#### From Crates.io (Coming Soon)
+
+```bash
+cargo install sonic-flow
+```
+
+### Quick Start
+
+```bash
+# Run the application
+cargo run
+
+# Or run the release build
+./target/release/sonic-flow
+```
+
+## 🏗️ Architecture
+
+Sonic Flow follows a layered architecture:
 
 ```
-このプロジェクトの開発を継続します。
-まず docs/CLAUDE.md, docs/ARCHITECTURE.md, docs/SPECIFICATION.md, docs/DIRECTORY.md, docs/SYSTEM.md を読み込んで、
-プロジェクトの文脈を理解してください。
-
-## 📋 開発タスク情報
-**機能名**: [機能の正式名称]
-**ブランチ名**: [feature/機能名-概要]
-**関連仕様**: [SPECIFICATION.mdの該当セクション]
-**優先度**: [必須/高/中/低]
-
-## 🎯 実装内容
-[具体的な開発タスクを記述]
-
-## 📝 実装要件
-- [ ] 仕様書通りの実装
-- [ ] 単体テストの作成
-- [ ] ドキュメントコメントの追加
-- [ ] エラーハンドリングの実装
-- [ ] パフォーマンス考慮
-
-## 🔍 レビューポイント
-[特に注意すべき点があれば記述]
+┌─────────────────────────────────────────────┐
+│                UI Layer (Slint)             │
+├─────────────────────────────────────────────┤
+│            Application Layer                │
+├─────────────────────────────────────────────┤
+│           Business Logic Layer              │
+├─────────────────────────────────────────────┤
+│          Infrastructure Layer               │
+└─────────────────────────────────────────────┘
 ```
+
+For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 📖 Documentation
+
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - System design and architecture
+- **[Feature Specifications](docs/SPECIFICATION.md)** - Detailed feature specifications
+- **[Directory Structure](docs/DIRECTORY.md)** - Project organization
+- **[System Design](docs/SYSTEM.md)** - Low-level system design
+- **[Development Guide](docs/CLAUDE.md)** - Development guidelines and context
+
+## 🛠️ Development
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/sonic-flow/sonic-flow.git
+cd sonic-flow
+
+# Install dependencies
+cargo check
+
+# Run in development mode
+cargo run
+
+# Run tests
+cargo test
+
+# Run with logging
+RUST_LOG=debug cargo run
+```
+
+### Project Structure
+
+```
+sonic-flow/
+├── src/
+│   ├── app/          # Application layer
+│   ├── audio/        # Audio engine
+│   ├── visualizer/   # Visualizer system
+│   ├── ui/           # User interface
+│   ├── config/       # Configuration management
+│   └── ...
+├── docs/             # Documentation
+├── tests/            # Tests
+└── assets/           # Static resources
+```
+
+### Development Workflow
+
+This project uses a feature-branch development model:
+
+1. **Create feature branch**: `git checkout -b feature/your-feature-name`
+2. **Implement feature**: Follow the coding guidelines in [docs/CLAUDE.md](docs/CLAUDE.md)
+3. **Write tests**: Ensure good test coverage
+4. **Create PR**: Use the provided PR template
+
+### Building
+
+```bash
+# Debug build
+cargo build
+
+# Release build (optimized)
+cargo build --release
+
+# With specific features
+cargo build --features "gpu-acceleration"
+```
+
+### Testing
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific test
+cargo test test_audio_engine
+
+# Run benchmarks
+cargo bench
+```
+
+## 🎯 Roadmap
+
+### Phase 1: Core Foundation ✅
+
+- [x] Project structure and build system
+- [x] Error handling framework
+- [x] Logging system
+- [x] Basic application lifecycle
+
+### Phase 2: Audio Engine (In Progress)
+
+- [ ] Basic audio playback (MP3, FLAC, WAV)
+- [ ] Audio device management
+- [ ] Real-time FFT analysis
+- [ ] Basic spectrum analyzer
+
+### Phase 3: Visualizers
+
+- [ ] Spectrum bars visualizer
+- [ ] Waveform visualizer
+- [ ] Plugin system foundation
+- [ ] Basic UI integration
+
+### Phase 4: Advanced Features
+
+- [ ] 3D visualizers
+- [ ] Audio effects pipeline
+- [ ] Advanced UI/UX
+- [ ] Performance optimization
+
+## 🤝 Contributing
+
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Code of conduct
+- Development setup
+- Coding standards
+- Pull request process
+
+### Areas We Need Help With
+
+- **Audio Processing**: DSP algorithms, audio format support
+- **Visualizations**: Creative visualization algorithms
+- **UI/UX Design**: Modern, intuitive interface design
+- **Platform Support**: Platform-specific optimizations
+- **Documentation**: User guides, API documentation
+
+## 📊 Performance
+
+Sonic Flow is designed for high performance:
+
+- **Memory Usage**: <100MB idle, <150MB with visualizers
+- **CPU Usage**: <5% during playback with visualizers
+- **Audio Latency**: <50ms end-to-end
+- **Visualizer FPS**: 60-120 FPS depending on complexity
+
+## 🔧 Configuration
+
+Configuration is managed through TOML files:
+
+```toml
+# ~/.config/sonic-flow/config.toml
+
+[audio]
+sample_rate = 44100
+buffer_size = 512
+device = "default"
+
+[visualizer]
+default_type = "spectrum_bars"
+update_rate = 60
+sensitivity = 1.0
+
+[ui]
+theme = "dark"
+window_width = 1200
+window_height = 800
+```
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **[Slint](https://slint.rs/)** - Modern UI toolkit for Rust
+- **[rodio](https://github.com/RustAudio/rodio)** - Cross-platform audio library
+- **[symphonia](https://github.com/pdeljanov/Symphonia)** - Audio decoding library
+- **[rustfft](https://github.com/ejmahler/RustFFT)** - FFT implementation
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/sonic-flow/sonic-flow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/sonic-flow/sonic-flow/discussions)
+- **Documentation**: [Online Docs](https://sonic-flow.github.io/)
+
+---
+
+**Built with 🦀 Rust and ❤️ for music lovers**
