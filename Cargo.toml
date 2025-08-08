@@ -1,12 +1,128 @@
 [package]
-name = "slint-rust-template"
+name = "sonic-flow"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Sonic Flow Team"]
+description = "A high-quality music player with advanced audio spectrum visualizers"
+repository = "https://github.com/itsakeyfut/sonic-flow"
+keywords = ["audio", "music", "visualizer", "player", "slint"]
+categories = ["multimedia::audio", "gui"]
 
 [dependencies]
-slint = "1.12.1"
+# UI Framework
+slint = { version = "1.12.1", features = ["renderer-winit-femtovg", "backend-winit"] }
+
+# 非同期処理
+tokio = { version = "1.47.1", features = ["full", "rt-multi-thread"] }
+futures = "0.3.31"
+async-trait = "0.1.88"
+
+# 音声処理
+rodio = { version = "0.21.1", features = ["symphonia"] }
+symphonia = { version = "0.5.4", features = ["all-codecs", "flac", "mp3", "ogg", "wav"] }
+cpal = "0.16.0"
+rustfft = "6.4.0"
+
+# データ管理
+sqlx = { version = "0.8.6", features = ["chrono", "runtime-tokio-rustls", "sqlite", "uuid"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.142"
+toml = "0.9.5"
+
+# エラーハンドリング
+anyhow = "1.0.98"
+thiserror = "2.0.12"
+
+# ログ・デバッグ
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+tracing-appender = "0.2.3"
+
+# ユーティリティ
+uuid = { version = "1.17.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.41", features = ["serde"] }
+url = "2.5.4"
+dirs = "6.0.0"
+
+# 並行処理
+crossbeam = "0.8.4"
+parking_lot = "0.12.4"
+dashmap = "6.1.0"
+tokio-util = "0.7.16"
+
+# 設定管理
+config = "0.15.13"
+
+# ファイル処理
+walkdir = "2.5.0"
+notify = "8.2.0"
+
+# 暗号化・ハッシュ
+sha2 = "0.10.9"
+
+# 画像処理（アルバムアート用）
+image = { version = "0.25.6", features = ["jpeg", "png"] }
+
+[target.'cfg(windows)'.dependencies]
+# Windows特有
+winapi = { version = "0.3.9", features = ["audioclient", "mmdeviceapi", "mmsystem"] }
+windows = { version = "0.61.3", features = ["Win32_Media_Audio"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS特有
+coreaudio-rs = "0.13.0"
+core-foundation = "0.10.1"
+coreaudio-sys = "0.2.17"
+
+[target.'cfg(unix)'.dependencies]
+# Linux特有
+alsa = "0.9.1"
+pulse = "0.5.3"
+libc = "0.2.174"
+
+[dev-dependencies]
+# テスト・ベンチマーク
+criterion = { version = "0.7.0", features = ["html_reports"] }
+proptest = "1.7.0"
+mockall = "0.13.1"
+tempfile = "3.20.0"
+wiremock = "0.6.4"
+serial_test = "3.2.0"
+
+# テスト用音声ファイル生成
+hound = "3.5.1"
 
 [build-dependencies]
 slint-build = "1.12.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.bench]
+debug = true
+
+# [[bench]]
+# name = "fft_performance"
+# harness = false
+
+# [[bench]]
+# name = "audio_processing"
+# harness = false
+
+# [[bench]]
+# name = "visualizer_render"
+# harness = false
+
+[workspace]
+# members = ["plugins/*"]
+
+[package.metadata.docs.rs]
+features = ["renderer-winit-femtovg", "backend-winit"]
+rustdoc-args = ["--cfg", "docsrs"]
