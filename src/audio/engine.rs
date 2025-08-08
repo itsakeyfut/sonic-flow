@@ -520,3 +520,17 @@ impl TrackLoader for AudioEngine {
         self.status.read().current_track
     }
 }
+
+impl PlaybackStatus for AudioEngine {
+    fn state(&self) -> PlaybackState {
+        self.status.read().state.clone()
+    }
+
+    fn position(&self) -> Duration {
+        self.status.read().position
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        self.status.read().duration
+    }
+}
