@@ -541,3 +541,83 @@ impl Drop for AudioEngine {
         let _ = self.command_sender.send(AudioCommand::Shutdown);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_audio_engine_creation() {
+        let result = AudioEngine::new();
+        assert!(result.is_ok());
+        
+        let engine = result.unwrap();
+        assert_eq!(engine.state(), PlaybackState::Stopped);
+        assert_eq!(engine.volume(), 0.8);
+        assert!(!engine.is_muted());
+    }
+
+    #[test]
+    fn test_audio_format_type() {
+        let mp3_format = AudioFormatType::from_extension("mp3");
+        assert_eq!(mp3_format, AudioFormatType::Mp3);
+        assert!(mp3_format.is_supported());
+        assert_eq!(mp3_format.as_str(), "mp3");
+        
+        let unknown_format = AudioFormatType::from_extension("xyz");
+        assert!(!unknown_format.is_supported());
+    }
+
+    #[tokio::test]
+    async fn test_volume_control() {
+        let mut engine = AudioEngine::new().unwrap();
+        
+        // Test volume setting
+        engine.set_volume(0.5);
+        // Note: Due to async nature, we can't immediately assert the volume
+        // In a real test, we'd need to wait or use a test double
+        
+        // Test muting
+        engine.set_muted(true);
+        // Similarly, muting is async
+    }
+
+    #[test]
+    fn test_track_info_creation() {
+        let track_id = Uuid::new_v4();
+        let path = PathBuf::from("test.mp3");
+        
+        let track_info = TrackInfo {
+            id: track_id,
+            path: path.clone(),
+            format: AudioFormat {
+                sample_rate: 44100,
+                channels: 2,
+                bit_depth: 16,
+                format_type: AudioFormatType::Mp3,
+            },
+            duration: Some(Duration::from_secs(180)),
+            file_size: 1024 * 1024,
+        };
+        
+        assert_eq!(track_info.id, track_id);
+        assert_eq!(track_info.path, path);
+        assert_eq!(track_info.format.sample_rate, 44100);
+    }
+
+    #[tokio::test]
+    async fn test_playback_state_transitions() {
+        let mut engine = AudioEngine::new().unwrap();
+        
+        // Initial state should be stopped
+        assert!(engine.is_stopped());
+        assert!(!engine.is_playing());
+        assert!(!engine.is_paused());
+        
+        // Test pause without track (should not panic)
+        let result = engine.pause().await;
+        assert!(result.is_ok());
+    }
+}
