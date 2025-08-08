@@ -52,3 +52,20 @@ enum AudioCommand {
     GetStatus(oneshot::Sender<AudioEngineStatus>),
     Shutdown,
 }
+
+/// Current status of the audio engine
+#[derive(Debug, Clone)]
+pub struct AudioEngineStatus {
+    /// Current playback state
+    pub state: PlaybackState,
+    /// Current position in the track
+    pub position: Duration,
+    /// Total track duration
+    pub duration: Option<Duration>,
+    /// Current volume (0.0 - 1.0)
+    pub volume: f32,
+    /// Whether audio is muted
+    pub is_muted: bool,
+    /// Currently loaded track
+    pub current_track: Option<TrackId>,
+}
