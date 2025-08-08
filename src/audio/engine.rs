@@ -411,4 +411,46 @@ impl AudioEngineWorker {
         debug!("Current track set to: {}", track_id);
         Ok(())
     }
+
+    /// Create a new sink for the specified track
+    async fn create_sink_for_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
+        let track_info = self
+            .tracks
+            .read()
+            .get(&track_id)
+            .cloned()
+            .ok_or_else(|| AudioError::InvalidState {
+                from: "unknown track".to_string(),
+                to: "playing".to_string(),
+            })?;
+
+        // Open and decode the audio file
+        let file = std::fs::File::open(&track_info.path)
+            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
+                format: format!("File open error: {}", e),
+            }))?;
+
+        let decoder = Decoder::new(file)
+            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
+                format: format!("Decoder initialization failed: {}", e),
+            }))?;
+
+        // Create new sink
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AudioError::Device(format!("Failed to create audio sink: {}", e)))?;
+
+        // Apply current volume settings
+        let status = self.status.read();
+        let volume = if status.is_muted { 0.0 } else { status.volume };
+        sink.set_volume(volume);
+
+        // Add source to sink
+        sink.append(decoder);
+        
+        // Store the sink
+        self.sink = Some(sink);
+
+        debug!("Sink created for track: {}", track_id);
+        Ok(())
+    }
 }
