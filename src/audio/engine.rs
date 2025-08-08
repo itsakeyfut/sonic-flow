@@ -325,4 +325,17 @@ impl AudioEngineWorker {
         
         Ok(())
     }
+
+    /// Handle set muted command
+    async fn handle_set_muted(&mut self, muted: bool) -> Result<(), AudioError> {
+        if let Some(ref sink) = self.sink {
+            let volume = if muted { 0.0 } else { self.status.read().volume };
+            sink.set_volume(volume);
+        }
+        
+        self.status.write().is_muted = muted;
+        debug!("Mute set to {}", muted);
+        
+        Ok(())
+    }
 }
