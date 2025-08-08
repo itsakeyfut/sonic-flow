@@ -43,11 +43,22 @@
 )]
 
 // Re-exports for public API
+pub use app::SonicFlow;
 pub use error::{Error, Result};
 
 // Core modules
 pub mod app;
+pub mod audio;
+pub mod config;
 pub mod error;
+pub mod library;
+pub mod playlist;
+pub mod ui;
+pub mod utils;
+pub mod visualizer;
+
+// Infrastructure modules
+pub mod plugin;
 
 // Type aliases for commonly used types
 pub use uuid::Uuid;
