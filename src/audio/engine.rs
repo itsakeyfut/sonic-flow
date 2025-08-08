@@ -174,3 +174,27 @@ impl AudioEngine {
             .map_err(|_| AudioError::Device("Failed to receive response from audio engine".to_string()))
     }
 }
+
+impl AudioEngineWorker {
+    /// Create a new audio engine worker
+    async fn new(
+        status: Arc<RwLock<AudioEngineStatus>>,
+        tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
+        command_receiver: mpsc::UnboundedReceiver<AudioCommand>,
+    ) -> Result<Self, AudioError> {
+        // Initialize rodio output stream
+        let (stream, stream_handle) = OutputStream::try_default()
+            .map_err(|e| AudioError::Device(format!("Failed to initialize audio output: {}", e)))?;
+
+        debug!("Audio output stream initialized");
+
+        Ok(Self {
+            _stream: stream,
+            stream_handle,
+            sink: None,
+            tracks,
+            status,
+            command_receiver,
+        })
+    }
+}
