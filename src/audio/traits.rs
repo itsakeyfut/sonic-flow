@@ -146,3 +146,38 @@ pub enum PlaybackState {
     /// Error state
     Error(String),
 }
+
+/// Playback status interface
+pub trait PlaybackStatus: Send + Sync {
+    /// Get current playback state
+    fn state(&self) -> PlaybackState;
+
+    /// Get current playback position
+    /// 
+    /// # Returns
+    /// 
+    /// Current position as duration from the beginning
+    fn position(&self) -> Duration;
+
+    /// Get total duration of the current track
+    /// 
+    /// # Returns
+    /// 
+    /// Total track duration, or None if not available
+    fn duration(&self) -> Option<Duration>;
+
+    /// Check if playback is currently active
+    fn is_playing(&self) -> bool {
+        matches!(self.state(), PlaybackState::Playing)
+    }
+
+    /// Check if playback is paused
+    fn is_paused(&self) -> bool {
+        matches!(self.state(), PlaybackState::Paused)
+    }
+
+    /// Check if playback is stopped
+    fn is_stopped(&self) -> bool {
+        matches!(self.state(), PlaybackState::Stopped)
+    }
+}
