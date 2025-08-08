@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -83,4 +83,20 @@ pub struct AudioEngine {
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Track information cache
     tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
+}
+
+/// Internal audio engine worker that runs on a dedicated thread
+struct AudioEngineWorker {
+    /// Rodio output stream
+    _stream: OutputStream,
+    /// Rodio stream handle for creating sinks
+    stream_handle: OutputStreamHandle,
+    /// Current audio sink for playback
+    sink: Option<Sink>,
+    /// Track information cache
+    tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
+    /// Current engine status
+    status: Arc<RwLock<AudioEngineStatus>>,
+    /// Command receiver
+    command_receiver: mpsc::UnboundedReceiver<AudioCommand>,
 }
