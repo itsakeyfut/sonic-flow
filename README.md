@@ -1,9 +1,5 @@
 # Sonic Flow
 
-[![Rust](https://github.com/sonic-flow/sonic-flow/workflows/Rust/badge.svg)](https://github.com/sonic-flow/sonic-flow/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/crates/v/sonic-flow.svg)](https://crates.io/crates/sonic-flow)
-
 A high-quality music player with advanced audio spectrum visualizers, built with Rust and Slint.
 
 ## ✨ Features
@@ -196,23 +192,6 @@ cargo bench
 - [ ] Advanced UI/UX
 - [ ] Performance optimization
 
-## 🤝 Contributing
-
-We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
-
-- Code of conduct
-- Development setup
-- Coding standards
-- Pull request process
-
-### Areas We Need Help With
-
-- **Audio Processing**: DSP algorithms, audio format support
-- **Visualizations**: Creative visualization algorithms
-- **UI/UX Design**: Modern, intuitive interface design
-- **Platform Support**: Platform-specific optimizations
-- **Documentation**: User guides, API documentation
-
 ## 📊 Performance
 
 Sonic Flow is designed for high performance:
@@ -244,24 +223,3 @@ theme = "dark"
 window_width = 1200
 window_height = 800
 ```
-
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **[Slint](https://slint.rs/)** - Modern UI toolkit for Rust
-- **[rodio](https://github.com/RustAudio/rodio)** - Cross-platform audio library
-- **[symphonia](https://github.com/pdeljanov/Symphonia)** - Audio decoding library
-- **[rustfft](https://github.com/ejmahler/RustFFT)** - FFT implementation
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/sonic-flow/sonic-flow/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/sonic-flow/sonic-flow/discussions)
-- **Documentation**: [Online Docs](https://sonic-flow.github.io/)
-
----
-
-**Built with 🦀 Rust and ❤️ for music lovers**
