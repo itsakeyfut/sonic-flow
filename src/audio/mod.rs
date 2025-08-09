@@ -44,3 +44,17 @@ impl Default for AudioConfig {
         }
     }
 }
+
+/// Audio engine builder for configuration
+pub struct AudioEngineBuilder {
+    config: AudioConfig,
+}
+
+impl AudioEngineBuilder {
+    /// Create a new audio engine builder with default configuration
+    pub fn new() -> Self {
+        Self {
+            config: AudioConfig::default(),
+        }
+    }
+}
