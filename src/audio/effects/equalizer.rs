@@ -109,3 +109,14 @@ impl Default for Equalizer {
         Self::new()
     }
 }
+
+/// Equalizer presets
+pub enum EqualizerPreset {
+    Flat,
+    Rock,
+    Pop,
+    Jazz,
+    Classical,
+    Electronic,
+    Custom([f32; 10]),
+}
