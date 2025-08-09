@@ -299,3 +299,10 @@ pub fn create_decoder(path: &Path) -> Result<Box<dyn AudioDecoder>, AudioError> 
 pub fn supported_extensions() -> &'static [&'static str] {
     &["mp3", "flac", "wav", "ogg", "m4a", "aac"]
 }
+
+/// Check if a file extension is supported
+pub fn is_supported_extension(extension: &str) -> bool {
+    supported_extensions()
+        .iter()
+        .any(|&ext| ext.eq_ignore_ascii_case(extension))
+}
