@@ -294,3 +294,8 @@ pub fn create_decoder(path: &Path) -> Result<Box<dyn AudioDecoder>, AudioError> 
     let decoder = UniversalDecoder::from_file(path)?;
     Ok(Box::new(decoder))
 }
+
+/// Get supported audio file extensions
+pub fn supported_extensions() -> &'static [&'static str] {
+    &["mp3", "flac", "wav", "ogg", "m4a", "aac"]
+}
