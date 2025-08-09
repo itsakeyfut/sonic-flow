@@ -136,4 +136,17 @@ impl UniversalDecoder {
             sample_buffer: None,
         })
     }
+
+    /// Get the duration of the audio file
+    /// 
+    /// # Returns
+    /// 
+    /// Duration of the audio file, or None if not available
+    pub fn duration(&self) -> Option<Duration> {
+        self.track.codec_params.n_frames
+            .map(|frames| {
+                let sample_rate = self.format.sample_rate as u64;
+                Duration::from_secs(frames / sample_rate)
+            })
+    }
 }
