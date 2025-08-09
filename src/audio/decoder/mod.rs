@@ -192,4 +192,30 @@ impl UniversalDecoder {
         // Convert to f32 samples
         self.convert_samples(&decoded, output)
     }
+
+    /// Convert audio buffer to f32 samples
+    fn convert_samples(&mut self, audio_buf: &AudioBufferRef, output: &mut [f32]) -> Result<usize, AudioError> {
+        // Create or reuse sample buffer
+        if self.sample_buffer.is_none() || 
+           self.sample_buffer.as_ref().unwrap().capacity() < audio_buf.frames() {
+            self.sample_buffer = Some(
+                symphonia::core::audio::SampleBuffer::<f32>::new(
+                    audio_buf.frames() as u64,
+                    *audio_buf.spec(),
+                )
+            );
+        }
+
+        let sample_buffer = self.sample_buffer.as_mut().unwrap();
+        
+        // Copy and convert samples
+        sample_buffer.copy_interleaved_ref(audio_buf);
+
+        let samples = sample_buffer.samples();
+        let copy_len = samples.len().min(output.len());
+        
+        output[..copy_len].copy_from_slice(&samples[..copy_len]);
+
+        Ok(copy_len)
+    }
 }
