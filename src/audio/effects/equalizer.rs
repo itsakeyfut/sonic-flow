@@ -25,3 +25,9 @@ impl EqualizerBand {
         }
     }
 }
+
+/// 10-band equalizer effect
+pub struct Equalizer {
+    bands: [EqualizerBand; 10],
+    enabled: bool,
+}
