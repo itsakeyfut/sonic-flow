@@ -1,11 +1,14 @@
 //! Audio engine and processing
+//!
+//! This module provides the core audio functionality for the Resonance Player,
+//! including playback control, audio decoding, and format support.
 
-pub mod traits;
 pub mod engine;
 pub mod decoder;
 pub mod renderer;
 pub mod effects;
 pub mod analysis;
+pub mod traits;
 
 // Re-export main types for convenience
 pub use engine::{AudioEngine, TrackInfo, AudioEngineStatus};
@@ -16,7 +19,7 @@ pub use traits::{
 };
 
 // Re-export error types
-pub use crate::error::{AudioError, DecoderError};
+pub use crate::error::{AudioError};
 
 /// Audio engine configuration
 #[derive(Debug, Clone)]
@@ -89,11 +92,7 @@ impl AudioEngineBuilder {
     }
 
     /// Build the audio engine with the configured options
-    ///
-    /// # Errors
-    ///
-    /// Returns `AudioError` if the audio engine cannot be initialized.
-    pub fn build(self) -> Result<AudioEngine, AudioError> {
+    pub fn build(self) -> Result<AudioEngine, crate::error::AudioError> {
         // For now, we ignore the configuration and create a default engine
         // TODO: Use the configuration to customize the engine
         AudioEngine::new()

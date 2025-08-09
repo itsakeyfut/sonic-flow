@@ -1,7 +1,6 @@
 //! Audio rendering and output management
 
 use crate::error::AudioError;
-use crate::Result;
 
 /// Audio renderer responsible for outputting processed audio
 pub struct AudioRenderer {
@@ -17,14 +16,6 @@ impl AudioRenderer {
     }
 
     /// Render audio samples to the output device
-    ///
-    /// # Arguments
-    ///
-    /// * `buffer` - Audio samples to render
-    ///
-    /// # Errors
-    ///
-    /// Returns `AudioError` if rendering fails
     pub fn render(&mut self, _buffer: &[f32]) -> Result<(), AudioError> {
         // TODO: Implement audio rendering
         // This will be handled by rodio's Sink for now

@@ -1,12 +1,12 @@
-//! Audio decoder implementation
-//! 
+//! Audio decoder implementations
+//!
 //! This module provides audio decoders for various formats using the
 //! symphonia crate for maximum format support and performance.
 
 use std::path::Path;
 use std::time::Duration;
 
-use symphonia::core::audio::{AudioBufferRef, Signal};
+use symphonia::core::audio::{AudioBufferRef};
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
@@ -14,8 +14,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::error::{AudioError, DecoderError};
-use crate::Result;
+use crate::error::AudioError;
 
 use super::traits::{AudioDecoder, AudioFormat, AudioFormatType};
 
@@ -43,20 +42,10 @@ pub struct UniversalDecoder {
 
 impl UniversalDecoder {
     /// Create a new universal decoder from a file path
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - Path to the audio file
-    ///
-    /// # Errors
-    ///
-    /// Returns `AudioError` if the file cannot be opened or decoded.
     pub fn from_file(path: &Path) -> Result<Self, AudioError> {
         // Open the file
         let file = std::fs::File::open(path)
-            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
-                format: format!("Failed to open file {}: {}", path.display(), e),
-            }))?;
+            .map_err(|e| AudioError::Streaming(format!("Failed to open file {}: {}", path.display(), e)))?;
 
         // Create media source stream
         let source = Box::new(file);
@@ -71,11 +60,9 @@ impl UniversalDecoder {
         // Probe the format
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
-            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
-                format: format!("Failed to probe format: {}", e),
-            }))?;
+            .map_err(|e| AudioError::Streaming(format!("Failed to probe format: {}", e)))?;
 
-        let format_reader = probed.format;
+        let mut format_reader = probed.format;
 
         // Find the best audio track
         let track = format_reader
@@ -83,16 +70,12 @@ impl UniversalDecoder {
             .iter()
             .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
             .cloned()
-            .ok_or_else(|| AudioError::Decoder(DecoderError::InitializationFailed {
-                format: "No suitable audio track found".to_string(),
-            }))?;
+            .ok_or_else(|| AudioError::Streaming("No suitable audio track found".to_string()))?;
 
         // Create decoder for the track
         let decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions { verify: false })
-            .map_err(|e| AudioError::Decoder(DecoderError::InitializationFailed {
-                format: format!("Failed to create decoder: {}", e),
-            }))?;
+            .map_err(|e| AudioError::Streaming(format!("Failed to create decoder: {}", e)))?;
 
         // Extract format information
         let codec_params = &track.codec_params;
@@ -138,10 +121,6 @@ impl UniversalDecoder {
     }
 
     /// Get the duration of the audio file
-    /// 
-    /// # Returns
-    /// 
-    /// Duration of the audio file, or None if not available
     pub fn duration(&self) -> Option<Duration> {
         self.track.codec_params.n_frames
             .map(|frames| {
@@ -151,18 +130,6 @@ impl UniversalDecoder {
     }
 
     /// Read and decode the next packet of audio data
-    ///
-    /// # Arguments
-    ///
-    /// * `output` - Buffer to write decoded samples
-    ///
-    /// # Returns
-    ///
-    /// Number of samples written, or 0 if end of stream
-    ///
-    /// # Errors
-    ///
-    /// Returns `AudioError` if decoding fails
     pub fn read_samples(&mut self, output: &mut [f32]) -> Result<usize, AudioError> {
         // Read the next packet
         let packet = match self.format_reader.next_packet() {
@@ -172,9 +139,7 @@ impl UniversalDecoder {
                 return Ok(0);
             }
             Err(e) => {
-                return Err(AudioError::Decoder(DecoderError::CorruptedData(
-                    format!("Failed to read packet: {}", e),
-                )));
+                return Err(AudioError::Streaming(format!("Failed to read packet: {}", e)));
             }
         };
 
@@ -185,9 +150,7 @@ impl UniversalDecoder {
 
         // Decode the packet
         let decoded = self.decoder.decode(&packet)
-            .map_err(|e| AudioError::Decoder(DecoderError::CorruptedData(
-                format!("Failed to decode packet: {}", e),
-            )))?;
+            .map_err(|e| AudioError::Streaming(format!("Failed to decode packet: {}", e)))?;
 
         // Convert to f32 samples
         self.convert_samples(&decoded, output)
@@ -208,8 +171,8 @@ impl UniversalDecoder {
 
         let sample_buffer = self.sample_buffer.as_mut().unwrap();
         
-        // Copy and convert samples
-        sample_buffer.copy_interleaved_ref(audio_buf);
+        // Copy and convert samples - fix the reference issue
+        sample_buffer.copy_interleaved_ref(audio_buf.clone());
 
         let samples = sample_buffer.samples();
         let copy_len = samples.len().min(output.len());
@@ -220,17 +183,11 @@ impl UniversalDecoder {
     }
 
     /// Reset the decoder to the beginning
-    ///
-    /// # Errors
-    ///
-    /// Returns `AudioError` if seeking to the beginning fails
     pub fn reset(&mut self) -> Result<(), AudioError> {
         // Reset format reader to the beginning
         self.format_reader.seek(symphonia::core::formats::SeekMode::Accurate, 
                                symphonia::core::formats::SeekTo::TimeStamp { ts: 0, track_id: self.track.id })
-            .map_err(|e| AudioError::Decoder(DecoderError::SeekFailed(
-                format!("Failed to seek to beginning: {}", e),
-            )))?;
+            .map_err(|e| AudioError::Streaming(format!("Failed to seek to beginning: {}", e)))?;
 
         // Reset decoder state
         self.decoder.reset();
@@ -261,9 +218,7 @@ impl AudioDecoder for UniversalDecoder {
             symphonia::core::formats::SeekMode::Accurate,
             symphonia::core::formats::SeekTo::TimeStamp { ts: timestamp, track_id: self.track.id }
         )
-        .map_err(|e| AudioError::Decoder(DecoderError::SeekFailed(
-            format!("Failed to seek to {:.2}s: {}", position.as_secs_f64(), e),
-        )))?;
+        .map_err(|e| AudioError::Streaming(format!("Failed to seek to {:.2}s: {}", position.as_secs_f64(), e)))?;
 
         self.decoder.reset();
         Ok(())
@@ -276,18 +231,6 @@ impl AudioDecoder for UniversalDecoder {
 }
 
 /// Create a decoder for the specified file
-///
-/// # Arguments
-///
-/// * `path` - Path to the audio file
-///
-/// # Returns
-///
-/// A boxed decoder that can handle the file format
-///
-/// # Errors
-///
-/// Returns `AudioError` if no suitable decoder is found or initialization fails.
 pub fn create_decoder(path: &Path) -> Result<Box<dyn AudioDecoder>, AudioError> {
     // For now, we always use the universal decoder
     // In the future, we might have format-specific optimizations
