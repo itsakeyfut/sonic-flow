@@ -238,3 +238,39 @@ impl UniversalDecoder {
         Ok(())
     }
 }
+
+impl AudioDecoder for UniversalDecoder {
+    fn decode(&mut self, _input: &[u8], output: &mut [f32]) -> Result<usize, AudioError> {
+        // The UniversalDecoder reads directly from the file,
+        // so we ignore the input buffer and read from our internal state
+        self.read_samples(output)
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.format.sample_rate
+    }
+
+    fn channels(&self) -> u16 {
+        self.format.channels
+    }
+
+    fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
+        let timestamp = (position.as_secs_f64() * self.format.sample_rate as f64) as u64;
+        
+        self.format_reader.seek(
+            symphonia::core::formats::SeekMode::Accurate,
+            symphonia::core::formats::SeekTo::TimeStamp { ts: timestamp, track_id: self.track.id }
+        )
+        .map_err(|e| AudioError::Decoder(DecoderError::SeekFailed(
+            format!("Failed to seek to {:.2}s: {}", position.as_secs_f64(), e),
+        )))?;
+
+        self.decoder.reset();
+        Ok(())
+    }
+
+    fn supports_seek(&self) -> bool {
+        // Most formats support seeking through symphonia
+        true
+    }
+}
