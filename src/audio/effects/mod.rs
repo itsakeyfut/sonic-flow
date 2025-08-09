@@ -27,3 +27,9 @@ pub trait AudioEffect: Send + Sync {
     /// Enable or disable the effect
     fn set_enabled(&mut self, enabled: bool);
 }
+
+/// Effects chain processor
+pub struct EffectsChain {
+    effects: Vec<Box<dyn AudioEffect>>,
+    enabled: bool,
+}
