@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use symphonia::core::audio::{AudioBufferRef};
+use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
@@ -62,7 +62,7 @@ impl UniversalDecoder {
             .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
             .map_err(|e| AudioError::Streaming(format!("Failed to probe format: {}", e)))?;
 
-        let mut format_reader = probed.format;
+        let format_reader = probed.format;
 
         // Find the best audio track
         let track = format_reader
@@ -152,16 +152,20 @@ impl UniversalDecoder {
         let decoded = self.decoder.decode(&packet)
             .map_err(|e| AudioError::Streaming(format!("Failed to decode packet: {}", e)))?;
 
-        // Convert to f32 samples
-        self.convert_samples(&decoded, output)
+        // Convert to f32 samples - split the mutable borrowing
+        Self::convert_samples_to_buffer(decoded, &mut self.sample_buffer, output)
     }
 
-    /// Convert audio buffer to f32 samples
-    fn convert_samples(&mut self, audio_buf: &AudioBufferRef, output: &mut [f32]) -> Result<usize, AudioError> {
+    /// Convert audio buffer to f32 samples (static method to avoid borrowing conflicts)
+    fn convert_samples_to_buffer(
+        audio_buf: AudioBufferRef<'_>, 
+        sample_buffer: &mut Option<symphonia::core::audio::SampleBuffer<f32>>,
+        output: &mut [f32]
+    ) -> Result<usize, AudioError> {
         // Create or reuse sample buffer
-        if self.sample_buffer.is_none() || 
-           self.sample_buffer.as_ref().unwrap().capacity() < audio_buf.frames() {
-            self.sample_buffer = Some(
+        if sample_buffer.is_none() || 
+           sample_buffer.as_ref().unwrap().capacity() < audio_buf.frames() {
+            *sample_buffer = Some(
                 symphonia::core::audio::SampleBuffer::<f32>::new(
                     audio_buf.frames() as u64,
                     *audio_buf.spec(),
@@ -169,12 +173,12 @@ impl UniversalDecoder {
             );
         }
 
-        let sample_buffer = self.sample_buffer.as_mut().unwrap();
+        let buffer = sample_buffer.as_mut().unwrap();
         
-        // Copy and convert samples - fix the reference issue
-        sample_buffer.copy_interleaved_ref(audio_buf.clone());
+        // Copy and convert samples
+        buffer.copy_interleaved_ref(audio_buf);
 
-        let samples = sample_buffer.samples();
+        let samples = buffer.samples();
         let copy_len = samples.len().min(output.len());
         
         output[..copy_len].copy_from_slice(&samples[..copy_len]);

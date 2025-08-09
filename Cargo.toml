@@ -18,8 +18,8 @@ futures = "0.3.31"
 async-trait = "0.1.88"
 
 # 音声処理
-rodio = { version = "0.21.1", features = ["symphonia"] }
-symphonia = { version = "0.5.4", features = ["all-codecs", "flac", "mp3", "ogg", "wav"] }
+rodio = { version = "0.19", features = ["mp3", "flac", "wav", "vorbis"] }
+symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "ogg"] }
 cpal = "0.16.0"
 rustfft = "6.4.0"
 

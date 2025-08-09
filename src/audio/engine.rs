@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -75,7 +75,7 @@ pub struct AudioEngine {
     /// Command sender for communicating with the audio thread
     command_sender: mpsc::UnboundedSender<AudioCommand>,
     /// Handle to the audio processing thread
-    _audio_thread: tokio::task::JoinHandle<()>,
+    _audio_thread: std::thread::JoinHandle<()>,
     /// Shared status information
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Track information cache
@@ -118,21 +118,30 @@ impl AudioEngine {
 
         let tracks = Arc::new(RwLock::new(HashMap::new()));
 
-        // Spawn the audio processing thread
+        // Clone for worker thread
         let worker_status = Arc::clone(&status);
         let worker_tracks = Arc::clone(&tracks);
 
-        let audio_thread = tokio::spawn(async move {
-            let worker = AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
+        // Spawn the audio processing thread on a dedicated thread pool
+        let audio_thread = std::thread::spawn(move || {
+            // Create a simple blocking runtime for audio operations
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create audio runtime");
             
-            match worker {
-                Ok(mut worker) => {
-                    worker.run().await;
+            rt.block_on(async move {
+                let worker = AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
+                
+                match worker {
+                    Ok(mut worker) => {
+                        worker.run().await;
+                    }
+                    Err(e) => {
+                        error!("Failed to initialize audio worker: {}", e);
+                    }
                 }
-                Err(e) => {
-                    error!("Failed to initialize audio worker: {}", e);
-                }
-            }
+            });
         });
 
         debug!("Audio engine initialized successfully");
@@ -419,10 +428,12 @@ impl AudioEngineWorker {
         let file = std::fs::File::open(&track_info.path)
             .map_err(|e| AudioError::Streaming(format!("File open error: {}", e)))?;
 
-        let source = Decoder::new(file)
+        // Use BufReader for better performance
+        let buf_reader = std::io::BufReader::new(file);
+        let source = Decoder::new(buf_reader)
             .map_err(|e| AudioError::Streaming(format!("Decoder initialization failed: {}", e)))?;
 
-        // Create new sink
+        // Create new sink using the stored stream handle
         let sink = Sink::try_new(&self.stream_handle)
             .map_err(|e| AudioError::Device(format!("Failed to create audio sink: {}", e)))?;
 
@@ -519,6 +530,18 @@ impl PlaybackStatus for AudioEngine {
 
     fn duration(&self) -> Option<Duration> {
         self.status.read().duration
+    }
+
+    fn is_playing(&self) -> bool {
+        matches!(self.state(), PlaybackState::Playing)
+    }
+
+    fn is_paused(&self) -> bool {
+        matches!(self.state(), PlaybackState::Paused)
+    }
+
+    fn is_stopped(&self) -> bool {
+        matches!(self.state(), PlaybackState::Stopped)
     }
 }
 
