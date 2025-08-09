@@ -103,3 +103,9 @@ impl AudioEffect for Equalizer {
         self.enabled = enabled;
     }
 }
+
+impl Default for Equalizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
