@@ -18,3 +18,10 @@ pub struct Crossfade {
     /// Enabled state
     enabled: bool,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+enum CrossfadeState {
+    Inactive,
+    FadingOut,
+    FadingIn,
+}
