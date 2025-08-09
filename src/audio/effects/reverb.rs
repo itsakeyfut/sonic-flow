@@ -33,3 +33,31 @@ pub struct Reverb {
     config: ReverbConfig,
     enabled: bool,
 }
+
+impl Reverb {
+    /// Create a new reverb effect
+    pub fn new() -> Self {
+        Self {
+            config: ReverbConfig::default(),
+            enabled: false,
+        }
+    }
+
+    /// Create a reverb effect with custom configuration
+    pub fn with_config(config: ReverbConfig) -> Self {
+        Self {
+            config,
+            enabled: false,
+        }
+    }
+
+    /// Update reverb configuration
+    pub fn set_config(&mut self, config: ReverbConfig) {
+        self.config = config;
+    }
+
+    /// Get current configuration
+    pub fn config(&self) -> &ReverbConfig {
+        &self.config
+    }
+}
