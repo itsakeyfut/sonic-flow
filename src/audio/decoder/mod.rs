@@ -218,4 +218,23 @@ impl UniversalDecoder {
 
         Ok(copy_len)
     }
+
+    /// Reset the decoder to the beginning
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioError` if seeking to the beginning fails
+    pub fn reset(&mut self) -> Result<(), AudioError> {
+        // Reset format reader to the beginning
+        self.format_reader.seek(symphonia::core::formats::SeekMode::Accurate, 
+                               symphonia::core::formats::SeekTo::TimeStamp { ts: 0, track_id: self.track.id })
+            .map_err(|e| AudioError::Decoder(DecoderError::SeekFailed(
+                format!("Failed to seek to beginning: {}", e),
+            )))?;
+
+        // Reset decoder state
+        self.decoder.reset();
+
+        Ok(())
+    }
 }
