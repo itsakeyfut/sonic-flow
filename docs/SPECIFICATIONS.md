@@ -581,14 +581,14 @@ pub struct ParallelVisualizationEngine {
 
 ```rust
 // 公開API
-pub struct ResonancePlayer {
+pub struct SonicFlow {
     engine: AudioEngine,
     visualizer: VisualizerEngine,
     playlist: PlaylistManager,
     config: ConfigManager,
 }
 
-impl ResonancePlayer {
+impl SonicFlow {
     pub fn new() -> Result<Self, PlayerError>;
     pub async fn load_track(&mut self, path: &Path) -> Result<TrackId, PlayerError>;
     pub async fn play(&mut self) -> Result<(), PlayerError>;
@@ -613,12 +613,12 @@ pub trait VisualizerPlugin {
 macro_rules! export_visualizer_plugin {
     ($plugin_type:ty) => {
         #[no_mangle]
-        pub extern "C" fn resonance_plugin_create() -> *mut dyn VisualizerPlugin {
+        pub extern "C" fn sonic_plugin_create() -> *mut dyn VisualizerPlugin {
             Box::into_raw(Box::new(<$plugin_type>::new()))
         }
 
         #[no_mangle]
-        pub extern "C" fn resonance_plugin_destroy(plugin: *mut dyn VisualizerPlugin) {
+        pub extern "C" fn sonic_plugin_destroy(plugin: *mut dyn VisualizerPlugin) {
             unsafe { Box::from_raw(plugin) };
         }
     };
@@ -630,7 +630,7 @@ macro_rules! export_visualizer_plugin {
 ### D1. 設定ファイル形式（TOML）
 
 ```toml
-# ~/.config/resonance-player/config.toml
+# ~/.config/sonic-flow/config.toml
 
 [audio]
 sample_rate = 44100

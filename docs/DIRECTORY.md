@@ -11,7 +11,7 @@
 ## プロジェクト構造概要
 
 ```
-resonance-player/
+sonic-flow/
 ├── 📁 src/                    # ソースコード
 ├── 📁 tests/                  # テスト
 ├── 📁 benches/                # ベンチマーク

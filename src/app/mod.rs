@@ -48,12 +48,12 @@ impl SonicFlow {
     ///
     /// Returns an error if the application encounters a fatal error during execution.
     pub async fn run(self) -> Result<()> {
-        info!("Starting Resonance Player main loop");
+        info!("Starting Sonic Flow main loop");
 
         // Run the application controller
         self.controller.run().await?;
 
-        info!("Resonance Player main loop completed");
+        info!("Sonic Flow main loop completed");
         Ok(())
     }
 
@@ -68,7 +68,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_resonance_player_creation() {
+    async fn test_sonic_flow_creation() {
         // For now, we'll skip actual initialization in tests
         // until we have proper mocking infrastructure
         let version = env!("CARGO_PKG_VERSION");
