@@ -149,4 +149,47 @@ impl UniversalDecoder {
                 Duration::from_secs(frames / sample_rate)
             })
     }
+
+    /// Read and decode the next packet of audio data
+    ///
+    /// # Arguments
+    ///
+    /// * `output` - Buffer to write decoded samples
+    ///
+    /// # Returns
+    ///
+    /// Number of samples written, or 0 if end of stream
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioError` if decoding fails
+    pub fn read_samples(&mut self, output: &mut [f32]) -> Result<usize, AudioError> {
+        // Read the next packet
+        let packet = match self.format_reader.next_packet() {
+            Ok(packet) => packet,
+            Err(SymphoniaError::IoError(ref err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => {
+                // End of stream
+                return Ok(0);
+            }
+            Err(e) => {
+                return Err(AudioError::Decoder(DecoderError::CorruptedData(
+                    format!("Failed to read packet: {}", e),
+                )));
+            }
+        };
+
+        // Skip packets that don't belong to our track
+        if packet.track_id() != self.track.id {
+            return self.read_samples(output);
+        }
+
+        // Decode the packet
+        let decoded = self.decoder.decode(&packet)
+            .map_err(|e| AudioError::Decoder(DecoderError::CorruptedData(
+                format!("Failed to decode packet: {}", e),
+            )))?;
+
+        // Convert to f32 samples
+        self.convert_samples(&decoded, output)
+    }
 }
