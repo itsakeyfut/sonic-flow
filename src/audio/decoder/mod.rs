@@ -274,3 +274,23 @@ impl AudioDecoder for UniversalDecoder {
         true
     }
 }
+
+/// Create a decoder for the specified file
+///
+/// # Arguments
+///
+/// * `path` - Path to the audio file
+///
+/// # Returns
+///
+/// A boxed decoder that can handle the file format
+///
+/// # Errors
+///
+/// Returns `AudioError` if no suitable decoder is found or initialization fails.
+pub fn create_decoder(path: &Path) -> Result<Box<dyn AudioDecoder>, AudioError> {
+    // For now, we always use the universal decoder
+    // In the future, we might have format-specific optimizations
+    let decoder = UniversalDecoder::from_file(path)?;
+    Ok(Box::new(decoder))
+}
