@@ -14,3 +14,14 @@ pub struct EqualizerBand {
     /// Q factor (bandwidth)
     pub q_factor: f32,
 }
+
+impl EqualizerBand {
+    /// Create a new equalizer band
+    pub fn new(frequency: f32, gain: f32, q_factor: f32) -> Self {
+        Self {
+            frequency,
+            gain: gain.clamp(-12.0, 12.0),
+            q_factor,
+        }
+    }
+}
