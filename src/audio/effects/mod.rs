@@ -85,3 +85,9 @@ impl EffectsChain {
         }
     }
 }
+
+impl Default for EffectsChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
