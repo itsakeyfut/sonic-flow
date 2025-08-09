@@ -5,8 +5,10 @@
 // Prevent console window in addition to Slint window in Windows release builds when, e.g., starting the app via file manager. Ignored on other platforms.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::error::Error;
+
 use sonic_flow::{Result, SonicFlow};
-use tracing::{erorr, info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // slint::include_modules!();
