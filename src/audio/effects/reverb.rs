@@ -81,3 +81,9 @@ impl AudioEffect for Reverb {
         self.enabled = enabled;
     }
 }
+
+impl Default for Reverb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
