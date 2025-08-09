@@ -16,3 +16,14 @@ pub struct ReverbConfig {
     /// Dry level (0.0 to 1.0)
     pub dry_level: f32,
 }
+
+impl Default for ReverbConfig {
+    fn default() -> Self {
+        Self {
+            room_size: 0.5,
+            damping: 0.5,
+            wet_level: 0.3,
+            dry_level: 0.7,
+        }
+    }
+}
