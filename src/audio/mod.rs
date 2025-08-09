@@ -1,6 +1,6 @@
 //! Audio engine and processing
 //!
-//! This module provides the core audio functionality for the Resonance Player,
+//! This module provides the core audio functionality for the Sonic Flow,
 //! including playback control, audio decoding, and format support.
 
 pub mod engine;
