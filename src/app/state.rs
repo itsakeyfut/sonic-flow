@@ -1,7 +1,11 @@
 //! Application state management
 
-use crate::{PlaylistId, TrackId};
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
+use parking_lot::RwLock;
+
+use crate::{PlaylistId, TrackId};
 
 /// Global application state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,5 +76,58 @@ impl Default for UiState {
             theme: "dark".to_string(),
             active_visualizer: "spectrum_bars".to_string(),
         }
+    }
+}
+
+/// Thread-safe state manager
+pub struct StateManager {
+    state: Arc<RwLock<AppState>>,
+}
+
+impl StateManager {
+    /// Create a new state manager
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(RwLock::new(AppState::default())),
+        }
+    }
+
+    /// Get a read lock on the state
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, AppState> {
+        self.state.read()
+    }
+
+    /// Get a write lock on the state
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, AppState> {
+        self.state.write()
+    }
+
+    /// Get a clone of the current state
+    pub fn get_state(&self) -> AppState {
+        self.state.read().clone()
+    }
+
+    /// Update playback state with a closure
+    pub fn update_player_state<F>(&self, f: F)
+    where
+        F: FnOnce(&mut PlaybackState),
+    {
+        let mut state = self.state.write();
+        f(&mut state.playback);
+    }
+
+    /// Update UI state with a closure
+    pub fn update_ui_state<F>(&self, f: F)
+    where
+        F: FnOnce(&mut UiState),
+    {
+        let mut state = self.state.write();
+        f(&mut state.ui);
+    }
+}
+
+impl Default for StateManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
