@@ -347,3 +347,161 @@ impl SpectrumAnalyzer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    #[test]
+    fn test_spectrum_analyzer_creation() {
+        let analyzer = SpectrumAnalyzer::new(1024, 44100, 64);
+        assert_eq!(analyzer.fft_size(), 1024);
+        assert_eq!(analyzer.sample_rate(), 44100);
+        assert_eq!(analyzer.output_bands(), 64);
+    }
+
+    #[test]
+    #[should_panic(expected = "FFT size must be power of 2")]
+    fn test_invalid_fft_size() {
+        SpectrumAnalyzer::new(1000, 44100, 64); // Not a power of 2
+    }
+
+    #[test]
+    fn test_window_function_generation() {
+        let hann_window = SpectrumAnalyzer::generate_window(8, WindowFunction::Hann);
+        assert_eq!(hann_window.len(), 8);
+        assert!((hann_window[0] - 0.0).abs() < 1e-6); // Should be close to 0 at edges
+        assert!((hann_window[7] - 0.0).abs() < 1e-6);
+        assert!(hann_window[4] > 0.9); // Should be close to 1 at center
+
+        let rect_window = SpectrumAnalyzer::generate_window(8, WindowFunction::Rectangular);
+        assert!(rect_window.iter().all(|&x| (x - 1.0).abs() < 1e-6)); // All should be 1.0
+    }
+
+    #[test]
+    fn test_frequency_range_setting() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 64);
+        analyzer.set_frequency_range(50.0, 15000.0);
+        assert_eq!(analyzer.frequency_range(), (50.0, 15000.0));
+
+        // Test clamping
+        analyzer.set_frequency_range(-10.0, 50000.0); // Should clamp min to 1.0, max to 22050
+        let (min_freq, max_freq) = analyzer.frequency_range();
+        assert_eq!(min_freq, 1.0);
+        assert_eq!(max_freq, 22050.0);
+    }
+
+    #[test]
+    fn test_analyze_sine_wave() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
+        
+        // Generate a 1kHz sine wave
+        let sample_rate = 44100.0;
+        let frequency = 1000.0;
+        let duration_samples = 2048;
+        
+        let samples: Vec<f32> = (0..duration_samples)
+            .map(|i| (2.0 * PI * frequency * i as f32 / sample_rate).sin())
+            .collect();
+
+        let spectrum_data = analyzer.analyze(&samples);
+        
+        assert_eq!(spectrum_data.bands.len(), 32);
+        assert!(spectrum_data.peak_level > 0.8); // Should detect significant signal
+        assert!(spectrum_data.rms_level > 0.5);
+        
+        // The 1kHz signal should create a peak in one of the frequency bands
+        let max_band = spectrum_data.bands.iter().fold(0.0f32, |acc, &x| acc.max(x));
+        assert!(max_band > 0.1); // Should have significant energy in some band
+    }
+
+    #[test]
+    fn test_analyze_silence() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
+        let samples = vec![0.0; 2048]; // Silence
+        
+        let spectrum_data = analyzer.analyze(&samples);
+        
+        assert_eq!(spectrum_data.bands.len(), 32);
+        assert_eq!(spectrum_data.peak_level, 0.0);
+        assert_eq!(spectrum_data.rms_level, 0.0);
+        
+        // All bands should be zero for silence
+        for &band in &spectrum_data.bands {
+            assert_eq!(band, 0.0);
+        }
+    }
+
+    #[test]
+    fn test_window_function_setting() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
+        
+        analyzer.set_window_function(WindowFunction::Blackman);
+        // We can't directly test the internal state, but we can verify it doesn't panic
+        
+        analyzer.set_window_function(WindowFunction::Hamming);
+        analyzer.set_window_function(WindowFunction::Rectangular);
+    }
+
+    #[test]
+    fn test_overlap_ratio_setting() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
+        
+        analyzer.set_overlap_ratio(0.75);
+        analyzer.set_overlap_ratio(-0.1); // Should clamp to 0.0
+        analyzer.set_overlap_ratio(0.9);  // Should clamp to 0.75
+    }
+
+    #[test]
+    fn test_logarithmic_spacing() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 10);
+        
+        analyzer.set_logarithmic_spacing(true);
+        let log_bands = analyzer.create_log_bands();
+        assert_eq!(log_bands.len(), 10);
+        
+        // Check that bands get progressively wider in linear frequency
+        let linear_widths: Vec<f32> = log_bands.iter()
+            .map(|(start, end)| end - start)
+            .collect();
+        
+        // Each band should be wider than the previous (approximately)
+        for i in 1..linear_widths.len() {
+            assert!(linear_widths[i] > linear_widths[i-1] * 0.9); // Allow some tolerance
+        }
+        
+        analyzer.set_logarithmic_spacing(false);
+        let linear_bands = analyzer.create_linear_bands();
+        assert_eq!(linear_bands.len(), 10);
+        
+        // Linear bands should have roughly equal widths
+        let linear_widths: Vec<f32> = linear_bands.iter()
+            .map(|(start, end)| end - start)
+            .collect();
+        
+        let expected_width = linear_widths[0];
+        for width in &linear_widths {
+            assert!((width - expected_width).abs() < 1.0); // Small tolerance for floating point
+        }
+    }
+
+    #[test]
+    fn test_reset() {
+        let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
+        
+        // Add some samples
+        let samples = vec![0.5; 2000];
+        analyzer.analyze(&samples);
+        
+        // Reset should clear internal state
+        analyzer.reset();
+        
+        // Analyzing silence after reset should give clean results
+        let silence = vec![0.0; 1024];
+        let spectrum_data = analyzer.analyze(&silence);
+        
+        assert_eq!(spectrum_data.peak_level, 0.0);
+        assert_eq!(spectrum_data.rms_level, 0.0);
+    }
+}
