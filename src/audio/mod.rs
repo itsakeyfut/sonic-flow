@@ -57,4 +57,51 @@ impl AudioEngineBuilder {
             config: AudioConfig::default(),
         }
     }
+
+    /// Set the default volume
+    pub fn with_volume(mut self, volume: f32) -> Self {
+        self.config.default_volume = volume.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Set the buffer size
+    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
+        self.config.buffer_size = buffer_size;
+        self
+    }
+
+    /// Set the sample rate
+    pub fn with_sample_rate(mut self, sample_rate: u32) -> Self {
+        self.config.sample_rate = sample_rate;
+        self
+    }
+
+    /// Set the number of channels
+    pub fn with_channels(mut self, channels: u16) -> Self {
+        self.config.channels = channels;
+        self
+    }
+
+    /// Enable or disable hardware acceleration
+    pub fn with_hardware_acceleration(mut self, enabled: bool) -> Self {
+        self.config.hardware_acceleration = enabled;
+        self
+    }
+
+    /// Build the audio engine with the configured options
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioError` if the audio engine cannot be initialized.
+    pub fn build(self) -> Result<AudioEngine, AudioError> {
+        // For now, we ignore the configuration and create a default engine
+        // TODO: Use the configuration to customize the engine
+        AudioEngine::new()
+    }
+}
+
+impl Default for AudioEngineBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
