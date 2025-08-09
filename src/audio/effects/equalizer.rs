@@ -120,3 +120,27 @@ pub enum EqualizerPreset {
     Electronic,
     Custom([f32; 10]),
 }
+
+impl EqualizerPreset {
+    /// Get the gain values for the preset
+    pub fn gains(&self) -> [f32; 10] {
+        match self {
+            Self::Flat => [0.0; 10],
+            Self::Rock => [5.0, 3.0, -1.0, -2.0, -1.0, 2.0, 4.0, 6.0, 6.0, 6.0],
+            Self::Pop => [-1.0, 2.0, 4.0, 4.0, 0.0, -1.0, -1.0, 0.0, 2.0, 3.0],
+            Self::Jazz => [4.0, 2.0, 0.0, 1.0, -1.0, -1.0, 0.0, 1.0, 2.0, 4.0],
+            Self::Classical => [5.0, 3.0, -1.0, -1.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0],
+            Self::Electronic => [5.0, 3.0, 1.0, 0.0, -2.0, 2.0, 1.0, 1.0, 4.0, 6.0],
+            Self::Custom(gains) => *gains,
+        }
+    }
+
+    /// Apply preset to an equalizer
+    pub fn apply_to(&self, equalizer: &mut Equalizer) -> Result<(), AudioError> {
+        let gains = self.gains();
+        for (i, &gain) in gains.iter().enumerate() {
+            equalizer.set_band_gain(i, gain)?;
+        }
+        Ok(())
+    }
+}
