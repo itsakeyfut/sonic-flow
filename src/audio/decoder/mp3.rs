@@ -1,11 +1,11 @@
 //! MP3 decoder implementation
 
-use std::time::Duration;
-use crate::error::AudioError;
 use super::super::traits::AudioDecoder;
+use crate::error::AudioError;
+use std::time::Duration;
 
 /// MP3-specific decoder
-/// 
+///
 /// This is a placeholder for a dedicated MP3 decoder.
 /// For now, we use the universal decoder for all formats.
 pub struct Mp3Decoder {
@@ -15,9 +15,7 @@ pub struct Mp3Decoder {
 impl Mp3Decoder {
     /// Create a new MP3 decoder
     pub fn new() -> Self {
-        Self {
-            _placeholder: (),
-        }
+        Self { _placeholder: () }
     }
 }
 

@@ -3,23 +3,23 @@
 //! This module provides the core audio functionality for the Sonic Flow,
 //! including playback control, audio decoding, and format support.
 
-pub mod engine;
-pub mod decoder;
-pub mod renderer;
-pub mod effects;
 pub mod analysis;
+pub mod decoder;
+pub mod effects;
+pub mod engine;
+pub mod renderer;
 pub mod traits;
 
 // Re-export main types for convenience
-pub use engine::{AudioEngine, TrackInfo, AudioEngineStatus};
-pub use decoder::{UniversalDecoder, create_decoder, supported_extensions, is_supported_extension};
+pub use decoder::{create_decoder, is_supported_extension, supported_extensions, UniversalDecoder};
+pub use engine::{AudioEngine, AudioEngineStatus, TrackInfo};
 pub use traits::{
-    PlaybackControl, VolumeControl, TrackLoader, PlaybackStatus, AudioDecoder,
-    PlaybackState, AudioFormat, AudioFormatType
+    AudioDecoder, AudioFormat, AudioFormatType, PlaybackControl, PlaybackState, PlaybackStatus,
+    TrackLoader, VolumeControl,
 };
 
 // Re-export error types
-pub use crate::error::{AudioError};
+pub use crate::error::AudioError;
 
 /// Audio engine configuration
 #[derive(Debug, Clone)]
@@ -141,7 +141,7 @@ pub mod utils {
         let hours = total_seconds / 3600;
         let minutes = (total_seconds % 3600) / 60;
         let seconds = total_seconds % 60;
-        
+
         if hours > 0 {
             format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
         } else {
@@ -203,8 +203,8 @@ mod tests {
     #[test]
     fn test_volume_clamping() {
         let builder = AudioEngineBuilder::new()
-            .with_volume(-0.5)  // Should be clamped to 0.0
-            .with_volume(1.5);  // Should be clamped to 1.0
+            .with_volume(-0.5) // Should be clamped to 0.0
+            .with_volume(1.5); // Should be clamped to 1.0
 
         assert_eq!(builder.config.default_volume, 1.0);
 

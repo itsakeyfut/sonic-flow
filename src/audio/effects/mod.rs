@@ -1,15 +1,20 @@
 //! Audio effects and processing
 
+pub mod crossfade;
 pub mod equalizer;
 pub mod reverb;
-pub mod crossfade;
 
 use crate::error::AudioError;
 
 /// Audio effect trait
 pub trait AudioEffect: Send + Sync {
     /// Apply the effect to an audio buffer
-    fn process(&mut self, buffer: &mut [f32], sample_rate: u32, channels: u16) -> Result<(), AudioError>;
+    fn process(
+        &mut self,
+        buffer: &mut [f32],
+        sample_rate: u32,
+        channels: u16,
+    ) -> Result<(), AudioError>;
 
     /// Reset the effect state
     fn reset(&mut self);
@@ -42,7 +47,12 @@ impl EffectsChain {
     }
 
     /// Process audio through the entire effects chain
-    pub fn process(&mut self, buffer: &mut [f32], sample_rate: u32, channels: u16) -> Result<(), AudioError> {
+    pub fn process(
+        &mut self,
+        buffer: &mut [f32],
+        sample_rate: u32,
+        channels: u16,
+    ) -> Result<(), AudioError> {
         if !self.enabled {
             return Ok(());
         }

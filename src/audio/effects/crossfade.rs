@@ -66,7 +66,12 @@ impl Crossfade {
 }
 
 impl AudioEffect for Crossfade {
-    fn process(&mut self, buffer: &mut [f32], sample_rate: u32, _channels: u16) -> Result<(), AudioError> {
+    fn process(
+        &mut self,
+        buffer: &mut [f32],
+        sample_rate: u32,
+        _channels: u16,
+    ) -> Result<(), AudioError> {
         if self.fade_state == CrossfadeState::Inactive {
             return Ok(());
         }

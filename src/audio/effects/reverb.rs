@@ -62,7 +62,12 @@ impl Reverb {
 }
 
 impl AudioEffect for Reverb {
-    fn process(&mut self, _buffer: &mut [f32], _sample_rate: u32, _channels: u16) -> Result<(), AudioError> {
+    fn process(
+        &mut self,
+        _buffer: &mut [f32],
+        _sample_rate: u32,
+        _channels: u16,
+    ) -> Result<(), AudioError> {
         // TODO: Implement reverb processing
         // This would involve implementing delay lines and feedback loops
         Ok(())

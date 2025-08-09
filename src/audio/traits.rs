@@ -3,11 +3,11 @@
 //! This module defines the core traits for audio playback, decoding,
 //! and rendering that form the foundation of the audio engine.
 
-use std::time::Duration;
-use std::path::Path;
-use async_trait::async_trait;
-use crate::{TrackId};
 use crate::error::AudioError;
+use crate::TrackId;
+use async_trait::async_trait;
+use std::path::Path;
+use std::time::Duration;
 
 /// Core playback control interface
 ///
@@ -174,7 +174,7 @@ impl AudioFormatType {
     pub fn as_str(&self) -> &str {
         match self {
             Self::Mp3 => "mp3",
-            Self::Flac => "flac", 
+            Self::Flac => "flac",
             Self::Wav => "wav",
             Self::Ogg => "ogg",
             Self::Aac => "aac",
@@ -191,10 +191,15 @@ mod tests {
     fn test_audio_format_type_from_extension() {
         assert_eq!(AudioFormatType::from_extension("mp3"), AudioFormatType::Mp3);
         assert_eq!(AudioFormatType::from_extension("MP3"), AudioFormatType::Mp3);
-        assert_eq!(AudioFormatType::from_extension("flac"), AudioFormatType::Flac);
+        assert_eq!(
+            AudioFormatType::from_extension("flac"),
+            AudioFormatType::Flac
+        );
         assert_eq!(AudioFormatType::from_extension("wav"), AudioFormatType::Wav);
-        assert_eq!(AudioFormatType::from_extension("unknown"), 
-                   AudioFormatType::Unknown("unknown".to_string()));
+        assert_eq!(
+            AudioFormatType::from_extension("unknown"),
+            AudioFormatType::Unknown("unknown".to_string())
+        );
     }
 
     #[test]
@@ -208,7 +213,7 @@ mod tests {
     fn test_playback_state_helpers() {
         let state = PlaybackState::Playing;
         assert!(matches!(state, PlaybackState::Playing));
-        
+
         let state = PlaybackState::Stopped;
         assert!(matches!(state, PlaybackState::Stopped));
     }

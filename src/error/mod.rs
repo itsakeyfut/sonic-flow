@@ -155,6 +155,10 @@ pub enum UiError {
     #[error("Slint compilation error: {0}")]
     SlintCompilation(String),
 
+    /// Slint runtime error
+    #[error("Slint runtime error: {0}")]
+    Slint(String),
+
     /// Component not found
     #[error("Component not found: {component}")]
     ComponentNotFound { component: String },
@@ -166,6 +170,14 @@ pub enum UiError {
     /// UI event handling error
     #[error("Event handling error: {0}")]
     EventHandling(String),
+
+    /// Binding error
+    #[error("Binding error: {0}")]
+    Binding(String),
+
+    /// Layout error
+    #[error("Layout error: {0}")]
+    Layout(String),
 }
 
 /// Playlist management errors
@@ -243,7 +255,7 @@ pub trait ErrorRecovery {
     fn recover(&mut self, error: Self::Error) -> std::result::Result<(), Self::Error>;
 }
 
-/// Utility functinos for error handling
+/// Utility functions for error handling
 impl Error {
     /// Check if this error is recoverable
     pub fn is_recoverable(&self) -> bool {
@@ -270,7 +282,7 @@ impl Error {
     }
 }
 
-/// Erro severity levels
+/// Error severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {
     /// Warning - operation can continue with degraded functionality
@@ -315,9 +327,8 @@ mod tests {
         };
         assert_eq!(warning_error.severity(), ErrorSeverity::Warning);
 
-        let critical_error = Error::Database(DatabaseError::Consistency(
-            "data corruption".to_string(),
-        ));
+        let critical_error =
+            Error::Database(DatabaseError::Consistency("data corruption".to_string()));
         assert_eq!(critical_error.severity(), ErrorSeverity::Critical);
     }
 }
