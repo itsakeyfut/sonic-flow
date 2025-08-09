@@ -1,12 +1,12 @@
 //! Error handling for the Sonic Flow.
-//! 
+//!
 //! This module provides a hierarchical error system that allows for
 //! proper error propagation and recovery strategies.
 
 use thiserror::Error;
 
 /// The main error type for the Sonic Flow application.
-/// 
+///
 /// This error type aggregates all possible errors that can occur
 /// within the application, providing a unified interface for error handling.
 #[derive(Error, Debug)]
@@ -315,9 +315,8 @@ mod tests {
         };
         assert_eq!(warning_error.severity(), ErrorSeverity::Warning);
 
-        let critical_error = Error::Database(DatabaseError::Consistency(
-            "data corruption".to_string(),
-        ));
+        let critical_error =
+            Error::Database(DatabaseError::Consistency("data corruption".to_string()));
         assert_eq!(critical_error.severity(), ErrorSeverity::Critical);
     }
 }

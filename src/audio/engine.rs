@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::error::AudioError;
-use crate::{TrackId};
+use crate::TrackId;
 
 use super::traits::{
     AudioFormat, AudioFormatType, PlaybackControl, PlaybackState, PlaybackStatus, TrackLoader,
@@ -129,10 +129,11 @@ impl AudioEngine {
                 .enable_all()
                 .build()
                 .expect("Failed to create audio runtime");
-            
+
             rt.block_on(async move {
-                let worker = AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
-                
+                let worker =
+                    AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
+
                 match worker {
                     Ok(mut worker) => {
                         worker.run().await;
@@ -171,9 +172,9 @@ impl AudioEngine {
 
         self.send_command(command).await?;
 
-        response_receiver
-            .await
-            .map_err(|_| AudioError::Device("Failed to receive response from audio engine".to_string()))
+        response_receiver.await.map_err(|_| {
+            AudioError::Device("Failed to receive response from audio engine".to_string())
+        })
     }
 }
 
@@ -292,11 +293,11 @@ impl AudioEngineWorker {
         if let Some(sink) = self.sink.take() {
             sink.stop();
         }
-        
+
         let mut status = self.status.write();
         status.state = PlaybackState::Stopped;
         status.position = Duration::ZERO;
-        
+
         debug!("Playback stopped");
         Ok(())
     }
@@ -306,38 +307,42 @@ impl AudioEngineWorker {
         // Seeking in rodio requires recreating the sink
         // This is a limitation of the current implementation
         warn!("Seeking not yet implemented - requires sink recreation");
-        
+
         // For now, just update the position in status
         // TODO: Implement proper seeking by recreating the sink at the target position
         self.status.write().position = position;
-        
+
         Ok(())
     }
 
     /// Handle set volume command
     async fn handle_set_volume(&mut self, volume: f32) -> Result<(), AudioError> {
         let clamped_volume = volume.clamp(0.0, 1.0);
-        
+
         if let Some(ref sink) = self.sink {
             sink.set_volume(clamped_volume);
         }
-        
+
         self.status.write().volume = clamped_volume;
         debug!("Volume set to {}", clamped_volume);
-        
+
         Ok(())
     }
 
     /// Handle set muted command
     async fn handle_set_muted(&mut self, muted: bool) -> Result<(), AudioError> {
         if let Some(ref sink) = self.sink {
-            let volume = if muted { 0.0 } else { self.status.read().volume };
+            let volume = if muted {
+                0.0
+            } else {
+                self.status.read().volume
+            };
             sink.set_volume(volume);
         }
-        
+
         self.status.write().is_muted = muted;
         debug!("Mute set to {}", muted);
-        
+
         Ok(())
     }
 
@@ -351,12 +356,11 @@ impl AudioEngineWorker {
             .map_err(|e| AudioError::Streaming(format!("File access error: {}", e)))?;
 
         // Determine audio format from extension
-        let extension = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| AudioError::UnsupportedFormat {
+        let extension = path.extension().and_then(|s| s.to_str()).ok_or_else(|| {
+            AudioError::UnsupportedFormat {
                 format: "No file extension".to_string(),
-            })?;
+            }
+        })?;
 
         let format_type = AudioFormatType::from_extension(extension);
         if !format_type.is_supported() {
@@ -383,7 +387,11 @@ impl AudioEngineWorker {
         // Store track info
         self.tracks.write().insert(track_id, track_info);
 
-        info!("Track loaded successfully: {} (ID: {})", path.display(), track_id);
+        info!(
+            "Track loaded successfully: {} (ID: {})",
+            path.display(),
+            track_id
+        );
         Ok(track_id)
     }
 
@@ -407,22 +415,22 @@ impl AudioEngineWorker {
         status.current_track = Some(track_id);
         status.state = PlaybackState::Stopped;
         status.position = Duration::ZERO;
-        
+
         debug!("Current track set to: {}", track_id);
         Ok(())
     }
 
     /// Create a new sink for the specified track
     async fn create_sink_for_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
-        let track_info = self
-            .tracks
-            .read()
-            .get(&track_id)
-            .cloned()
-            .ok_or_else(|| AudioError::InvalidState {
-                from: "unknown track".to_string(),
-                to: "playing".to_string(),
-            })?;
+        let track_info =
+            self.tracks
+                .read()
+                .get(&track_id)
+                .cloned()
+                .ok_or_else(|| AudioError::InvalidState {
+                    from: "unknown track".to_string(),
+                    to: "playing".to_string(),
+                })?;
 
         // Open and decode the audio file
         let file = std::fs::File::open(&track_info.path)
@@ -444,7 +452,7 @@ impl AudioEngineWorker {
 
         // Add source to sink
         sink.append(source);
-        
+
         // Store the sink
         self.sink = Some(sink);
 
@@ -505,8 +513,10 @@ impl VolumeControl for AudioEngine {
 #[async_trait]
 impl TrackLoader for AudioEngine {
     async fn load_track(&mut self, path: &Path) -> Result<TrackId, AudioError> {
-        self.send_command_with_response(|sender| AudioCommand::LoadTrack(path.to_path_buf(), sender))
-            .await?
+        self.send_command_with_response(|sender| {
+            AudioCommand::LoadTrack(path.to_path_buf(), sender)
+        })
+        .await?
     }
 
     async fn set_current_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
@@ -565,7 +575,7 @@ mod tests {
             println!("AudioEngine creation failed in test environment");
             return;
         }
-        
+
         let engine = result.unwrap();
         assert_eq!(engine.state(), PlaybackState::Stopped);
         assert_eq!(engine.volume(), 0.8);
@@ -578,7 +588,7 @@ mod tests {
         assert_eq!(mp3_format, AudioFormatType::Mp3);
         assert!(mp3_format.is_supported());
         assert_eq!(mp3_format.as_str(), "mp3");
-        
+
         let unknown_format = AudioFormatType::from_extension("xyz");
         assert!(!unknown_format.is_supported());
     }
@@ -589,13 +599,13 @@ mod tests {
         if result.is_err() {
             return; // Skip test in environments without audio
         }
-        
+
         let mut engine = result.unwrap();
-        
+
         // Test volume setting
         engine.set_volume(0.5);
         // Note: Due to async nature, we can't immediately assert the volume
-        
+
         // Test muting
         engine.set_muted(true);
     }
@@ -604,7 +614,7 @@ mod tests {
     fn test_track_info_creation() {
         let track_id = Uuid::new_v4();
         let path = PathBuf::from("test.mp3");
-        
+
         let track_info = TrackInfo {
             id: track_id,
             path: path.clone(),
@@ -617,7 +627,7 @@ mod tests {
             duration: Some(Duration::from_secs(180)),
             file_size: 1024 * 1024,
         };
-        
+
         assert_eq!(track_info.id, track_id);
         assert_eq!(track_info.path, path);
         assert_eq!(track_info.format.sample_rate, 44100);
@@ -629,14 +639,14 @@ mod tests {
         if result.is_err() {
             return;
         }
-        
+
         let mut engine = result.unwrap();
-        
+
         // Initial state should be stopped
         assert!(engine.is_stopped());
         assert!(!engine.is_playing());
         assert!(!engine.is_paused());
-        
+
         // Test pause without track (should not panic)
         let result = engine.pause().await;
         assert!(result.is_ok());

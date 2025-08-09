@@ -2,16 +2,16 @@
 
 use std::sync::Arc;
 
-use tracing::{info, debug, error};
 use tokio::sync::RwLock;
+use tracing::{debug, error, info};
 
+use crate::audio::traits::{PlaybackStatus, TrackLoader, VolumeControl};
 use crate::audio::{AudioEngine, AudioEngineBuilder};
-use crate::audio::traits::{PlaybackStatus, VolumeControl, TrackLoader};
 use crate::config::ConfigManager;
-use crate::{Result, Error};
+use crate::{Error, Result};
 
-use super::{AppState, EventBus};
 use super::lifecycle::LifecycleManager;
+use super::{AppState, EventBus};
 
 /// Main application controller that orchestrates all subsystems
 pub struct AppController {
@@ -45,7 +45,7 @@ impl AppController {
                 .with_buffer_size(1024)
                 .with_sample_rate(44100)
                 .build()
-                .map_err(Error::Audio)?
+                .map_err(Error::Audio)?,
         ));
         debug!("Audio engine initialized");
 
@@ -118,7 +118,7 @@ impl AppController {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
-            
+
             loop {
                 interval.tick().await;
 
@@ -135,7 +135,7 @@ impl AppController {
                 {
                     let mut state = app_state.write().await;
                     let playback = &mut state.playback;
-                    
+
                     let old_state = playback.is_playing;
                     playback.is_playing = current_state == crate::audio::PlaybackState::Playing;
                     playback.position = current_position.as_secs_f64();
@@ -147,7 +147,8 @@ impl AppController {
                     if old_state != playback.is_playing {
                         if playback.is_playing {
                             if let Some(track_id) = current_track {
-                                let _ = event_bus.publish(crate::app::AppEvent::PlaybackStarted(track_id));
+                                let _ = event_bus
+                                    .publish(crate::app::AppEvent::PlaybackStarted(track_id));
                             }
                         } else {
                             let _ = event_bus.publish(crate::app::AppEvent::PlaybackPaused);
@@ -247,12 +248,15 @@ mod tests {
         let result = AppController::new().await;
         // This might fail in test environment due to audio system initialization
         if result.is_err() {
-            println!("AppController creation failed (expected in test environment): {:?}", result.err());
+            println!(
+                "AppController creation failed (expected in test environment): {:?}",
+                result.err()
+            );
             return;
         }
-        
+
         let controller = result.unwrap();
-        
+
         // Verify that all components are initialized
         assert!(!controller.audio_engine.read().await.is_playing());
     }
@@ -270,10 +274,10 @@ mod tests {
         // Receive the event with timeout
         let event_result = timeout(Duration::from_millis(100), receiver.recv()).await;
         assert!(event_result.is_ok());
-        
+
         let event = event_result.unwrap();
         assert!(event.is_ok());
-        
+
         match event.unwrap() {
             crate::app::AppEvent::PlaybackPaused => {
                 // Expected
@@ -285,7 +289,7 @@ mod tests {
     #[tokio::test]
     async fn test_app_state_initialization() {
         let state = AppState::default();
-        
+
         assert!(!state.playback.is_playing);
         assert_eq!(state.playback.position, 0.0);
         assert_eq!(state.playback.volume, 0.8);

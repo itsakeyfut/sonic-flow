@@ -84,7 +84,12 @@ impl Equalizer {
 }
 
 impl AudioEffect for Equalizer {
-    fn process(&mut self, _buffer: &mut [f32], _sample_rate: u32, _channels: u16) -> Result<(), AudioError> {
+    fn process(
+        &mut self,
+        _buffer: &mut [f32],
+        _sample_rate: u32,
+        _channels: u16,
+    ) -> Result<(), AudioError> {
         // TODO: Implement actual EQ processing
         // This would involve implementing biquad filters for each band
         Ok(())

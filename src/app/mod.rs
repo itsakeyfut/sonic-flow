@@ -1,22 +1,22 @@
 //! Application layer - Main application controller and state management
-//! 
+//!
 //! This module contains the main application controller that orchestrates
 //! the interaction between different components of the Sonic Flow.
 
 use crate::{Error, Result};
-use tracing::{info, debug, error};
+use tracing::{debug, error, info};
 
 pub mod controller;
-pub mod state;
 pub mod events;
 pub mod lifecycle;
+pub mod state;
 
 pub use controller::AppController;
-pub use state::{AppState, PlaybackState};
 pub use events::{AppEvent, EventBus};
+pub use state::{AppState, PlaybackState};
 
 /// The main Sonic Flow application
-/// 
+///
 /// This is the entry point for the application that coordinates all subsystems
 /// including audio engine, UI, visualizers, and configuration management.
 pub struct SonicFlow {
@@ -25,9 +25,9 @@ pub struct SonicFlow {
 
 impl SonicFlow {
     /// Create a new instance of Sonic Flow
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if any of the subsystems fail to initialize.
     pub async fn new() -> Result<Self> {
         info!("Initializing Sonic Flow");

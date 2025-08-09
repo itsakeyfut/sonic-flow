@@ -1,7 +1,7 @@
 //! Event system for application communication
 
+use crate::{PlaylistId, Result, TrackId};
 use tokio::sync::broadcast;
-use crate::{Result, TrackId, PlaylistId};
 
 /// Application event types
 #[derive(Debug, Clone)]
@@ -46,7 +46,8 @@ impl EventBus {
 
     /// Publish an event
     pub fn publish(&self, event: AppEvent) -> Result<()> {
-        self.sender.send(event)
+        self.sender
+            .send(event)
             .map_err(|e| crate::Error::Application(format!("Failed to publish event: {}", e)))?;
         Ok(())
     }

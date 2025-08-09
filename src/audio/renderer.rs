@@ -10,9 +10,7 @@ pub struct AudioRenderer {
 impl AudioRenderer {
     /// Create a new audio renderer
     pub fn new() -> Result<Self, AudioError> {
-        Ok(Self {
-            _placeholder: (),
-        })
+        Ok(Self { _placeholder: () })
     }
 
     /// Render audio samples to the output device

@@ -18,12 +18,12 @@ use crate::error::AudioError;
 
 use super::traits::{AudioDecoder, AudioFormat, AudioFormatType};
 
-pub mod mp3;
 pub mod flac;
+pub mod mp3;
 pub mod wav;
 
-pub use mp3::Mp3Decoder;
 pub use flac::FlacDecoder;
+pub use mp3::Mp3Decoder;
 pub use wav::WavDecoder;
 
 /// Universal audio decoder that can handle multiple formats
@@ -44,8 +44,9 @@ impl UniversalDecoder {
     /// Create a new universal decoder from a file path
     pub fn from_file(path: &Path) -> Result<Self, AudioError> {
         // Open the file
-        let file = std::fs::File::open(path)
-            .map_err(|e| AudioError::Streaming(format!("Failed to open file {}: {}", path.display(), e)))?;
+        let file = std::fs::File::open(path).map_err(|e| {
+            AudioError::Streaming(format!("Failed to open file {}: {}", path.display(), e))
+        })?;
 
         // Create media source stream
         let source = Box::new(file);
@@ -59,7 +60,12 @@ impl UniversalDecoder {
 
         // Probe the format
         let probed = symphonia::default::get_probe()
-            .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+            .format(
+                &hint,
+                mss,
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            )
             .map_err(|e| AudioError::Streaming(format!("Failed to probe format: {}", e)))?;
 
         let format_reader = probed.format;
@@ -80,7 +86,8 @@ impl UniversalDecoder {
         // Extract format information
         let codec_params = &track.codec_params;
         let sample_rate = codec_params.sample_rate.unwrap_or(44100);
-        let channels = codec_params.channels
+        let channels = codec_params
+            .channels
             .map(|ch| ch.count() as u16)
             .unwrap_or(2);
         let bit_depth = codec_params.bits_per_sample.unwrap_or(16) as u16;
@@ -89,9 +96,9 @@ impl UniversalDecoder {
         let format_type = match codec_params.codec {
             symphonia::core::codecs::CODEC_TYPE_MP3 => AudioFormatType::Mp3,
             symphonia::core::codecs::CODEC_TYPE_FLAC => AudioFormatType::Flac,
-            symphonia::core::codecs::CODEC_TYPE_PCM_S16LE |
-            symphonia::core::codecs::CODEC_TYPE_PCM_S24LE |
-            symphonia::core::codecs::CODEC_TYPE_PCM_F32LE => AudioFormatType::Wav,
+            symphonia::core::codecs::CODEC_TYPE_PCM_S16LE
+            | symphonia::core::codecs::CODEC_TYPE_PCM_S24LE
+            | symphonia::core::codecs::CODEC_TYPE_PCM_F32LE => AudioFormatType::Wav,
             symphonia::core::codecs::CODEC_TYPE_VORBIS => AudioFormatType::Ogg,
             symphonia::core::codecs::CODEC_TYPE_AAC => AudioFormatType::Aac,
             _ => {
@@ -122,11 +129,10 @@ impl UniversalDecoder {
 
     /// Get the duration of the audio file
     pub fn duration(&self) -> Option<Duration> {
-        self.track.codec_params.n_frames
-            .map(|frames| {
-                let sample_rate = self.format.sample_rate as u64;
-                Duration::from_secs(frames / sample_rate)
-            })
+        self.track.codec_params.n_frames.map(|frames| {
+            let sample_rate = self.format.sample_rate as u64;
+            Duration::from_secs(frames / sample_rate)
+        })
     }
 
     /// Read and decode the next packet of audio data
@@ -134,12 +140,17 @@ impl UniversalDecoder {
         // Read the next packet
         let packet = match self.format_reader.next_packet() {
             Ok(packet) => packet,
-            Err(SymphoniaError::IoError(ref err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => {
+            Err(SymphoniaError::IoError(ref err))
+                if err.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
                 // End of stream
                 return Ok(0);
             }
             Err(e) => {
-                return Err(AudioError::Streaming(format!("Failed to read packet: {}", e)));
+                return Err(AudioError::Streaming(format!(
+                    "Failed to read packet: {}",
+                    e
+                )));
             }
         };
 
@@ -149,7 +160,9 @@ impl UniversalDecoder {
         }
 
         // Decode the packet
-        let decoded = self.decoder.decode(&packet)
+        let decoded = self
+            .decoder
+            .decode(&packet)
             .map_err(|e| AudioError::Streaming(format!("Failed to decode packet: {}", e)))?;
 
         // Convert to f32 samples - split the mutable borrowing
@@ -158,29 +171,28 @@ impl UniversalDecoder {
 
     /// Convert audio buffer to f32 samples (static method to avoid borrowing conflicts)
     fn convert_samples_to_buffer(
-        audio_buf: AudioBufferRef<'_>, 
+        audio_buf: AudioBufferRef<'_>,
         sample_buffer: &mut Option<symphonia::core::audio::SampleBuffer<f32>>,
-        output: &mut [f32]
+        output: &mut [f32],
     ) -> Result<usize, AudioError> {
         // Create or reuse sample buffer
-        if sample_buffer.is_none() || 
-           sample_buffer.as_ref().unwrap().capacity() < audio_buf.frames() {
-            *sample_buffer = Some(
-                symphonia::core::audio::SampleBuffer::<f32>::new(
-                    audio_buf.frames() as u64,
-                    *audio_buf.spec(),
-                )
-            );
+        if sample_buffer.is_none()
+            || sample_buffer.as_ref().unwrap().capacity() < audio_buf.frames()
+        {
+            *sample_buffer = Some(symphonia::core::audio::SampleBuffer::<f32>::new(
+                audio_buf.frames() as u64,
+                *audio_buf.spec(),
+            ));
         }
 
         let buffer = sample_buffer.as_mut().unwrap();
-        
+
         // Copy and convert samples
         buffer.copy_interleaved_ref(audio_buf);
 
         let samples = buffer.samples();
         let copy_len = samples.len().min(output.len());
-        
+
         output[..copy_len].copy_from_slice(&samples[..copy_len]);
 
         Ok(copy_len)
@@ -189,8 +201,14 @@ impl UniversalDecoder {
     /// Reset the decoder to the beginning
     pub fn reset(&mut self) -> Result<(), AudioError> {
         // Reset format reader to the beginning
-        self.format_reader.seek(symphonia::core::formats::SeekMode::Accurate, 
-                               symphonia::core::formats::SeekTo::TimeStamp { ts: 0, track_id: self.track.id })
+        self.format_reader
+            .seek(
+                symphonia::core::formats::SeekMode::Accurate,
+                symphonia::core::formats::SeekTo::TimeStamp {
+                    ts: 0,
+                    track_id: self.track.id,
+                },
+            )
             .map_err(|e| AudioError::Streaming(format!("Failed to seek to beginning: {}", e)))?;
 
         // Reset decoder state
@@ -217,12 +235,22 @@ impl AudioDecoder for UniversalDecoder {
 
     fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
         let timestamp = (position.as_secs_f64() * self.format.sample_rate as f64) as u64;
-        
-        self.format_reader.seek(
-            symphonia::core::formats::SeekMode::Accurate,
-            symphonia::core::formats::SeekTo::TimeStamp { ts: timestamp, track_id: self.track.id }
-        )
-        .map_err(|e| AudioError::Streaming(format!("Failed to seek to {:.2}s: {}", position.as_secs_f64(), e)))?;
+
+        self.format_reader
+            .seek(
+                symphonia::core::formats::SeekMode::Accurate,
+                symphonia::core::formats::SeekTo::TimeStamp {
+                    ts: timestamp,
+                    track_id: self.track.id,
+                },
+            )
+            .map_err(|e| {
+                AudioError::Streaming(format!(
+                    "Failed to seek to {:.2}s: {}",
+                    position.as_secs_f64(),
+                    e
+                ))
+            })?;
 
         self.decoder.reset();
         Ok(())
@@ -265,7 +293,7 @@ mod tests {
         assert!(extensions.contains(&"mp3"));
         assert!(extensions.contains(&"flac"));
         assert!(extensions.contains(&"wav"));
-        
+
         assert!(is_supported_extension("mp3"));
         assert!(is_supported_extension("MP3"));
         assert!(!is_supported_extension("xyz"));
@@ -274,7 +302,10 @@ mod tests {
     #[test]
     fn test_format_type_detection() {
         assert_eq!(AudioFormatType::from_extension("mp3"), AudioFormatType::Mp3);
-        assert_eq!(AudioFormatType::from_extension("FLAC"), AudioFormatType::Flac);
+        assert_eq!(
+            AudioFormatType::from_extension("FLAC"),
+            AudioFormatType::Flac
+        );
     }
 
     // Note: File-based tests would require test audio files

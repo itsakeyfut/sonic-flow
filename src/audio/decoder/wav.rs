@@ -1,8 +1,8 @@
 //! WAV decoder implementation
 
-use std::time::Duration;
-use crate::error::AudioError;
 use super::super::traits::AudioDecoder;
+use crate::error::AudioError;
+use std::time::Duration;
 
 /// WAV-specific decoder
 ///
@@ -15,9 +15,7 @@ pub struct WavDecoder {
 impl WavDecoder {
     /// Create a new WAV decoder
     pub fn new() -> Self {
-        Self {
-            _placeholder: (),
-        }
+        Self { _placeholder: () }
     }
 }
 

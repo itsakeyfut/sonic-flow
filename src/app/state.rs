@@ -1,7 +1,7 @@
 //! Application state management
 
+use crate::{PlaylistId, TrackId};
 use serde::{Deserialize, Serialize};
-use crate::{TrackId, PlaylistId};
 
 /// Global application state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +68,7 @@ impl Default for PlaybackState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
-            window_size:(1200, 800),
+            window_size: (1200, 800),
             theme: "dark".to_string(),
             active_visualizer: "spectrum_bars".to_string(),
         }

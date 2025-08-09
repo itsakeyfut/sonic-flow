@@ -1,10 +1,10 @@
 //! Configuration management system
 
-pub mod manager;
-pub mod schema;
-pub mod defaults;
+// pub mod manager;
+// pub mod schema;
+// pub mod defaults;
 
-pub use manager::ConfigManager;
+// pub use manager::ConfigManager;
 
 /// Placeholder for configuration system
 pub struct ConfigManager {
