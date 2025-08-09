@@ -61,3 +61,23 @@ impl Reverb {
         &self.config
     }
 }
+
+impl AudioEffect for Reverb {
+    fn process(&mut self, _buffer: &mut [f32], _sample_rate: u32, _channels: u16) -> Result<(), AudioError> {
+        // TODO: Implement reverb processing
+        // This would involve implementing delay lines and feedback loops
+        Ok(())
+    }
+
+    fn reset(&mut self) {
+        // TODO: Clear delay line buffers
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+}
