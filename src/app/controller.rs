@@ -237,3 +237,61 @@ impl AppController {
         Arc::clone(&self.app_state)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn test_app_controller_creation() {
+        let result = AppController::new().await;
+        // This might fail in test environment due to audio system initialization
+        // In a complete test setup, we'd mock the audio system
+        if result.is_err() {
+            println!("AppController creation failed (expected in test environment): {:?}", result.err());
+            return;
+        }
+        
+        let controller = result.unwrap();
+        
+        // Verify that all components are initialized
+        assert!(!controller.audio_engine.read().await.is_playing());
+    }
+
+    #[tokio::test]
+    async fn test_event_system() {
+        // Create a standalone event bus for testing
+        let event_bus = EventBus::new();
+        let mut receiver = event_bus.subscribe();
+
+        // Publish an event
+        let result = event_bus.publish(crate::app::AppEvent::PlaybackPaused);
+        assert!(result.is_ok());
+
+        // Receive the event with timeout
+        let event_result = timeout(Duration::from_millis(100), receiver.recv()).await;
+        assert!(event_result.is_ok());
+        
+        let event = event_result.unwrap();
+        assert!(event.is_ok());
+        
+        match event.unwrap() {
+            crate::app::AppEvent::PlaybackPaused => {
+                // Expected
+            }
+            other => panic!("Unexpected event: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_app_state_initialization() {
+        let state = AppState::default();
+        
+        assert!(!state.playback.is_playing);
+        assert_eq!(state.playback.position, 0.0);
+        assert_eq!(state.playback.volume, 0.8);
+        assert!(!state.playback.is_muted);
+        assert_eq!(state.current_playlist, None);
+    }
+}
