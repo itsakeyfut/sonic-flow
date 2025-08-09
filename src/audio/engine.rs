@@ -1,5 +1,5 @@
 //! Core audio engine implementation
-//! 
+//!
 //! This module provides the main AudioEngine that handles audio playback,
 //! track management, and audio processing coordination.
 
@@ -71,7 +71,7 @@ pub struct AudioEngineStatus {
 }
 
 /// Main audio engine implementation
-/// 
+///
 /// The AudioEngine manages audio playback using rodio for cross-platform
 /// audio support. It runs on a dedicated thread to avoid blocking the UI.
 pub struct AudioEngine {
@@ -103,9 +103,9 @@ struct AudioEngineWorker {
 
 impl AudioEngine {
     /// Create a new audio engine instance
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `AudioError` if the audio system cannot be initialized.
     pub fn new() -> Result<Self, AudioError> {
         info!("Initializing audio engine");
@@ -131,7 +131,7 @@ impl AudioEngine {
 
         let audio_thread = tokio::spawn(async move {
             let worker = AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
-
+            
             match worker {
                 Ok(mut worker) => {
                     worker.run().await;
