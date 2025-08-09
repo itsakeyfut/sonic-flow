@@ -1,5 +1,6 @@
 //! Audio engine and processing
 
+pub mod traits;
 pub mod engine;
 pub mod decoder;
 pub mod renderer;
