@@ -27,3 +27,9 @@ impl Default for ReverbConfig {
         }
     }
 }
+
+/// Reverb effect
+pub struct Reverb {
+    config: ReverbConfig,
+    enabled: bool,
+}
