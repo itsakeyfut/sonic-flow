@@ -18,3 +18,25 @@ pub struct SpectrumData {
     /// Timestamp when data was captured
     pub timestamp: std::time::Instant,
 }
+
+impl SpectrumData {
+    /// Create new spectrum data
+    pub fn new(bands: Vec<f32>, peak_level: f32, rms_level: f32) -> Self {
+        Self {
+            bands,
+            peak_level,
+            rms_level,
+            timestamp: std::time::Instant::now(),
+        }
+    }
+
+    /// Get the number of frequency bands
+    pub fn band_count(&self) -> usize {
+        self.bands.len()
+    }
+
+    /// Check if the data is recent (within specified age)
+    pub fn is_recent(&self, max_age: Duration) -> bool {
+        self.timestamp.elapsed() <= max_age
+    }
+}
