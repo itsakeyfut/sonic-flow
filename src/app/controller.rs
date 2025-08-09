@@ -1,34 +1,41 @@
 //! Main application controller
 
 use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
+use tracing::{info, debug, error};
 
-use tokio::sync::RwLock;
-use tracing::{debug, error, info};
-
-use crate::audio::traits::{PlaybackStatus, TrackLoader, VolumeControl};
-use crate::audio::{AudioEngine, AudioEngineBuilder};
+use crate::audio::{AudioEngine, AudioEngineBuilder, AudioEngineStatus};
+use crate::audio::traits::{PlaybackControl, VolumeControl, TrackLoader, PlaybackStatus, PlaybackState};
 use crate::config::ConfigManager;
-use crate::{Error, Result};
+use crate::ui::{UiSystem, MainWindowBinding};
+use crate::{Result, Error, TrackId};
 
+use super::state::{StateManager, AppState};
+use super::events::{AppEvent, EventBus, TrackInfo};
 use super::lifecycle::LifecycleManager;
-use super::{AppState, EventBus};
 
 /// Main application controller that orchestrates all subsystems
 pub struct AppController {
     /// Audio engine for playback
-    audio_engine: Arc<RwLock<AudioEngine>>,
+    audio_engine: Arc<tokio::sync::RwLock<AudioEngine>>,
+    
     /// Configuration manager
     config_manager: Arc<ConfigManager>,
+    
     /// Event bus for inter-component communication
     event_bus: Arc<EventBus>,
+    
     /// Application state
-    app_state: Arc<RwLock<AppState>>,
+    state_manager: Arc<StateManager>,
+    
+    /// UI system
+    ui_system: UiSystem,
 }
 
 impl AppController {
     /// Create a new application controller
     pub async fn new() -> Result<Self> {
-        info!("Initializing application controller");
+        info!("Initializing Sonic Flow application controller");
 
         // Initialize lifecycle manager and perform startup
         let lifecycle_manager = LifecycleManager::new();
@@ -39,13 +46,13 @@ impl AppController {
         debug!("Configuration manager initialized");
 
         // Initialize audio engine with configuration
-        let audio_engine = Arc::new(RwLock::new(
+        let audio_engine = Arc::new(tokio::sync::RwLock::new(
             AudioEngineBuilder::new()
                 .with_volume(0.8)
                 .with_buffer_size(1024)
                 .with_sample_rate(44100)
                 .build()
-                .map_err(Error::Audio)?,
+                .map_err(Error::Audio)?
         ));
         debug!("Audio engine initialized");
 
@@ -54,20 +61,25 @@ impl AppController {
         debug!("Event bus initialized");
 
         // Initialize application state
-        let app_state = Arc::new(RwLock::new(AppState::default()));
+        let state_manager = Arc::new(StateManager::new());
         debug!("Application state initialized");
+        
+        // Initialize UI system - fix dereferencing issue
+        let ui_system = UiSystem::new(EventBus::clone(&event_bus))?;
+        debug!("UI system initialized");
 
         Ok(Self {
             audio_engine,
             config_manager,
             event_bus,
-            app_state,
+            state_manager,
+            ui_system,
         })
     }
 
     /// Run the application main loop
-    pub async fn run(self) -> Result<()> {
-        info!("Starting application controller main loop");
+    pub async fn run(mut self) -> Result<()> {
+        info!("Starting Sonic Flow application controller main loop");
 
         // Create lifecycle manager for shutdown handling
         let lifecycle_manager = LifecycleManager::new();
@@ -75,50 +87,59 @@ impl AppController {
         // Start background tasks
         let audio_task = self.start_audio_monitoring_task();
         let event_task = self.start_event_processing_task();
+        let ui_update_task = self.start_ui_update_task();
 
-        // Wait for shutdown signal
-        let shutdown_result = lifecycle_manager.wait_for_shutdown().await;
+        // Show the main window
+        self.ui_system.main_window().show()?;
 
-        // Wait for either shutdown signal or critical error
-        tokio::select! {
+        // Run UI in the main thread instead of spawn_blocking
+        // This avoids the thread safety issues
+        let ui_result = tokio::select! {
             result = audio_task => {
-                match result {
-                    Ok(Ok(())) => info!("Audio monitoring task completed"),
-                    Ok(Err(e)) => error!("Audio monitoring task failed: {}", e),
-                    Err(e) => error!("Audio monitoring task panicked: {}", e),
-                }
+                error!("Audio task ended unexpectedly: {:?}", result);
+                Err(Error::Application("Audio task ended".to_string()))
             }
             result = event_task => {
-                match result {
-                    Ok(Ok(())) => info!("Event processing task completed"),
-                    Ok(Err(e)) => error!("Event processing task failed: {}", e),
-                    Err(e) => error!("Event processing task panicked: {}", e),
+                error!("Event task ended unexpectedly: {:?}", result);
+                Err(Error::Application("Event task ended".to_string()))
+            }
+            result = ui_update_task => {
+                error!("UI update task ended unexpectedly: {:?}", result);
+                Err(Error::Application("UI update task ended".to_string()))
+            }
+            // Run UI in current thread
+            ui_result = async {
+                self.ui_system.run()
+            } => {
+                match ui_result {
+                    Ok(()) => {
+                        info!("UI completed normally");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("UI error: {}", e);
+                        Err(e)
+                    }
                 }
             }
-            result = async { shutdown_result } => {
-                match result {
-                    Ok(()) => info!("Shutdown signal received"),
-                    Err(e) => error!("Shutdown monitoring failed: {}", e),
-                }
-            }
-        }
+        };
 
         // Perform cleanup
         self.shutdown().await?;
 
-        info!("Application controller main loop completed");
-        Ok(())
+        info!("Sonic Flow application controller main loop completed");
+        ui_result
     }
 
     /// Start the audio monitoring background task
     fn start_audio_monitoring_task(&self) -> tokio::task::JoinHandle<Result<()>> {
         let audio_engine = Arc::clone(&self.audio_engine);
-        let app_state = Arc::clone(&self.app_state);
+        let state_manager = Arc::clone(&self.state_manager);
         let event_bus = Arc::clone(&self.event_bus);
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
-
+            
             loop {
                 interval.tick().await;
 
@@ -133,31 +154,30 @@ impl AppController {
 
                 // Update app state
                 {
-                    let mut state = app_state.write().await;
+                    let mut state = state_manager.write();
                     let playback = &mut state.playback;
-
-                    let old_state = playback.is_playing;
-                    playback.is_playing = current_state == crate::audio::PlaybackState::Playing;
+                    
+                    let old_playing = playback.is_playing;
+                    playback.is_playing = current_state == PlaybackState::Playing;
                     playback.position = current_position.as_secs_f64();
                     playback.volume = current_volume;
                     playback.is_muted = is_muted;
                     playback.current_track = current_track;
 
                     // Publish events for state changes
-                    if old_state != playback.is_playing {
+                    if old_playing != playback.is_playing {
                         if playback.is_playing {
                             if let Some(track_id) = current_track {
-                                let _ = event_bus
-                                    .publish(crate::app::AppEvent::PlaybackStarted(track_id));
+                                let _ = event_bus.publish(AppEvent::PlaybackStarted(track_id));
                             }
                         } else {
-                            let _ = event_bus.publish(crate::app::AppEvent::PlaybackPaused);
+                            let _ = event_bus.publish(AppEvent::PlaybackPaused);
                         }
                     }
                 }
 
                 // Check for any critical errors
-                if matches!(current_state, crate::audio::PlaybackState::Error(_)) {
+                if matches!(current_state, PlaybackState::Error(_)) {
                     error!("Audio engine is in error state: {:?}", current_state);
                     // Could implement error recovery here
                 }
@@ -169,34 +189,105 @@ impl AppController {
     fn start_event_processing_task(&self) -> tokio::task::JoinHandle<Result<()>> {
         let event_bus = Arc::clone(&self.event_bus);
         let audio_engine = Arc::clone(&self.audio_engine);
+        let state_manager = Arc::clone(&self.state_manager);
 
         tokio::spawn(async move {
             let mut event_receiver = event_bus.subscribe();
 
             while let Ok(event) = event_receiver.recv().await {
                 match event {
-                    crate::app::AppEvent::PlaybackStarted(track_id) => {
-                        info!("Playback started for track: {}", track_id);
-                        // Could trigger UI updates, logging, etc.
+                    AppEvent::TogglePlayback => {
+                        let mut engine = audio_engine.write().await;
+                        let current_state = engine.state();
+                        
+                        match current_state {
+                            PlaybackState::Playing => {
+                                if let Err(e) = engine.pause().await {
+                                    error!("Failed to pause playback: {}", e);
+                                } else {
+                                    info!("Playback paused");
+                                }
+                            }
+                            PlaybackState::Paused | PlaybackState::Stopped => {
+                                if let Err(e) = engine.play().await {
+                                    error!("Failed to start playback: {}", e);
+                                } else {
+                                    info!("Playback started");
+                                }
+                            }
+                            _ => {
+                                debug!("Toggle playback ignored in current state: {:?}", current_state);
+                            }
+                        }
                     }
-                    crate::app::AppEvent::PlaybackPaused => {
-                        info!("Playback paused");
+                    
+                    AppEvent::PlaybackStopped => {
+                        let mut engine = audio_engine.write().await;
+                        if let Err(e) = engine.stop().await {
+                            error!("Failed to stop playback: {}", e);
+                        } else {
+                            info!("Playback stopped");
+                        }
                     }
-                    crate::app::AppEvent::PlaybackStopped => {
-                        info!("Playback stopped");
+                    
+                    AppEvent::NextTrack => {
+                        let mut engine = audio_engine.write().await;
+                        if let Err(e) = engine.next_track().await {
+                            error!("Failed to switch to next track: {}", e);
+                        } else {
+                            info!("Switched to next track");
+                        }
                     }
-                    crate::app::AppEvent::VolumeChanged(volume) => {
-                        info!("Volume changed to: {}", volume);
-                        // Update audio engine if the change came from UI
+                    
+                    AppEvent::PreviousTrack => {
+                        let mut engine = audio_engine.write().await;
+                        if let Err(e) = engine.previous_track().await {
+                            error!("Failed to switch to previous track: {}", e);
+                        } else {
+                            info!("Switched to previous track");
+                        }
+                    }
+                    
+                    AppEvent::VolumeChanged(volume) => {
                         let mut engine = audio_engine.write().await;
                         engine.set_volume(volume);
+                        debug!("Volume changed to: {:.2}", volume);
                     }
-                    crate::app::AppEvent::ApplicationExit => {
+                    
+                    AppEvent::PlaybackPositionChanged(position) => {
+                        let mut engine = audio_engine.write().await;
+                        let duration = std::time::Duration::from_secs_f64(position * 300.0); // TODO: Use actual track duration
+                        if let Err(e) = engine.seek(duration).await {
+                            error!("Failed to seek: {}", e);
+                        } else {
+                            debug!("Seek to position: {:.2}s", position);
+                        }
+                    }
+                    
+                    AppEvent::VisualizerChanged(visualizer_type) => {
+                        state_manager.update_ui_state(|ui| {
+                            // Fix field name - use active_visualizer instead of visualizer_type
+                            ui.active_visualizer = visualizer_type.clone();
+                        });
+                        info!("Visualizer changed to: {}", visualizer_type);
+                    }
+                    
+                    AppEvent::TrackChanged(track) => {
+                        state_manager.update_player_state(|player| {
+                            player.current_track = Some(track.id);
+                            player.duration = track.duration.as_secs_f64();
+                            player.position = 0.0;
+                        });
+                        info!("Track changed: {:?}", track.title);
+                    }
+                    
+                    AppEvent::ApplicationExit => {
                         info!("Application exit requested");
                         break;
                     }
+                    
                     _ => {
-                        debug!("Received event: {:?}", event);
+                        debug!("Received unhandled event: {:?}", event);
                     }
                 }
             }
@@ -205,9 +296,85 @@ impl AppController {
         })
     }
 
+    /// Start the UI update background task
+    fn start_ui_update_task(&self) -> tokio::task::JoinHandle<Result<()>> {
+        let state_manager = Arc::clone(&self.state_manager);
+        let main_window_weak = self.ui_system.main_window().as_weak();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+            let mut last_state = state_manager.get_state();
+
+            loop {
+                interval.tick().await;
+
+                let current_state = state_manager.get_state();
+
+                // Check if state has changed
+                if Self::state_changed(&last_state, &current_state) {
+                    // Update UI
+                    if let Some(window) = main_window_weak.upgrade() {
+                        // Update playback state
+                        let is_playing = current_state.playback.is_playing;
+                        let is_paused = !is_playing && current_state.playback.position > 0.0;
+                        let state_text = if is_playing {
+                            "Playing"
+                        } else if is_paused {
+                            "Paused"
+                        } else {
+                            "Stopped"
+                        };
+
+                        window.set_is_playing(is_playing);
+                        window.set_is_paused(is_paused);
+                        window.set_playback_state(state_text.into());
+                        
+                        // Update volume
+                        window.set_volume(current_state.playback.volume);
+                        
+                        // Update progress
+                        let progress = if current_state.playback.duration > 0.0 {
+                            (current_state.playback.position / current_state.playback.duration) as f32
+                        } else {
+                            0.0
+                        };
+                        window.set_progress(progress);
+                        
+                        // Update time displays
+                        let position_text = Self::format_duration_from_secs(current_state.playback.position);
+                        let duration_text = Self::format_duration_from_secs(current_state.playback.duration);
+                        window.set_position_text(position_text.into());
+                        window.set_duration_text(duration_text.into());
+                        
+                        // Update visualizer type - fix field name
+                        window.set_visualizer_type(current_state.ui.active_visualizer.clone().into());
+                    }
+
+                    last_state = current_state;
+                }
+            }
+        })
+    }
+
+    /// Check if state has changed significantly
+    fn state_changed(old: &AppState, new: &AppState) -> bool {
+        old.playback.is_playing != new.playback.is_playing ||
+        (old.playback.volume - new.playback.volume).abs() > 0.01 ||
+        (old.playback.position - new.playback.position).abs() > 0.5 ||
+        old.ui.active_visualizer != new.ui.active_visualizer // Fix field name
+    }
+
+    /// Format duration from seconds
+    fn format_duration_from_secs(secs: f64) -> String {
+        let total_seconds = secs as u64;
+        let minutes = total_seconds / 60;
+        let seconds = total_seconds % 60;
+        format!("{:02}:{:02}", minutes, seconds)
+    }
+
     /// Shutdown the application controller
     async fn shutdown(&self) -> Result<()> {
-        info!("Shutting down application controller");
+        info!("Shutting down Sonic Flow application controller");
 
         // Create a lifecycle manager for shutdown
         let lifecycle_manager = LifecycleManager::new();
@@ -215,26 +382,6 @@ impl AppController {
 
         debug!("Application controller shutdown completed");
         Ok(())
-    }
-
-    /// Get a reference to the audio engine
-    pub fn audio_engine(&self) -> Arc<RwLock<AudioEngine>> {
-        Arc::clone(&self.audio_engine)
-    }
-
-    /// Get a reference to the configuration manager
-    pub fn config_manager(&self) -> Arc<ConfigManager> {
-        Arc::clone(&self.config_manager)
-    }
-
-    /// Get a reference to the event bus
-    pub fn event_bus(&self) -> Arc<EventBus> {
-        Arc::clone(&self.event_bus)
-    }
-
-    /// Get a reference to the application state
-    pub fn app_state(&self) -> Arc<RwLock<AppState>> {
-        Arc::clone(&self.app_state)
     }
 }
 
