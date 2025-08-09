@@ -168,3 +168,88 @@ pub mod utils {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    #[test]
+    fn test_audio_config_default() {
+        let config = AudioConfig::default();
+        assert_eq!(config.default_volume, 0.8);
+        assert_eq!(config.buffer_size, 1024);
+        assert_eq!(config.sample_rate, 44100);
+        assert_eq!(config.channels, 2);
+        assert!(config.hardware_acceleration);
+    }
+
+    #[test]
+    fn test_audio_engine_builder() {
+        let builder = AudioEngineBuilder::new()
+            .with_volume(0.5)
+            .with_buffer_size(2048)
+            .with_sample_rate(48000)
+            .with_channels(1)
+            .with_hardware_acceleration(false);
+
+        assert_eq!(builder.config.default_volume, 0.5);
+        assert_eq!(builder.config.buffer_size, 2048);
+        assert_eq!(builder.config.sample_rate, 48000);
+        assert_eq!(builder.config.channels, 1);
+        assert!(!builder.config.hardware_acceleration);
+    }
+
+    #[test]
+    fn test_volume_clamping() {
+        let builder = AudioEngineBuilder::new()
+            .with_volume(-0.5)  // Should be clamped to 0.0
+            .with_volume(1.5);  // Should be clamped to 1.0
+
+        assert_eq!(builder.config.default_volume, 1.0);
+
+        let builder = AudioEngineBuilder::new().with_volume(0.3);
+        assert_eq!(builder.config.default_volume, 0.3);
+    }
+
+    #[test]
+    fn test_audio_file_detection() {
+        assert!(utils::is_audio_file(&PathBuf::from("test.mp3")));
+        assert!(utils::is_audio_file(&PathBuf::from("song.flac")));
+        assert!(utils::is_audio_file(&PathBuf::from("audio.wav")));
+        assert!(!utils::is_audio_file(&PathBuf::from("document.txt")));
+        assert!(!utils::is_audio_file(&PathBuf::from("no_extension")));
+    }
+
+    #[test]
+    fn test_format_from_path() {
+        let path = PathBuf::from("test.mp3");
+        let format = utils::get_format_from_path(&path);
+        assert_eq!(format, Some(AudioFormatType::Mp3));
+
+        let path = PathBuf::from("test.unknown");
+        let format = utils::get_format_from_path(&path);
+        assert_eq!(format, None);
+    }
+
+    #[test]
+    fn test_duration_formatting() {
+        let duration = Duration::from_secs(125); // 2:05
+        assert_eq!(utils::format_duration(duration), "02:05");
+
+        let duration = Duration::from_secs(3665); // 1:01:05
+        assert_eq!(utils::format_duration_with_hours(duration), "01:01:05");
+
+        let duration = Duration::from_secs(65); // 1:05 (no hours)
+        assert_eq!(utils::format_duration_with_hours(duration), "01:05");
+    }
+
+    #[test]
+    fn test_file_size_formatting() {
+        assert_eq!(utils::format_file_size(512), "512 B");
+        assert_eq!(utils::format_file_size(1536), "1.5 KB");
+        assert_eq!(utils::format_file_size(1024 * 1024), "1.0 MB");
+        assert_eq!(utils::format_file_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+}
