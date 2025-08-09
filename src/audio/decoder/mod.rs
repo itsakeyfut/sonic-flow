@@ -306,3 +306,31 @@ pub fn is_supported_extension(extension: &str) -> bool {
         .iter()
         .any(|&ext| ext.eq_ignore_ascii_case(extension))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_supported_extensions() {
+        let extensions = supported_extensions();
+        assert!(extensions.contains(&"mp3"));
+        assert!(extensions.contains(&"flac"));
+        assert!(extensions.contains(&"wav"));
+        
+        assert!(is_supported_extension("mp3"));
+        assert!(is_supported_extension("MP3"));
+        assert!(!is_supported_extension("xyz"));
+    }
+
+    #[test]
+    fn test_format_type_detection() {
+        assert_eq!(AudioFormatType::from_extension("mp3"), AudioFormatType::Mp3);
+        assert_eq!(AudioFormatType::from_extension("FLAC"), AudioFormatType::Flac);
+    }
+
+    // Note: File-based tests would require test audio files
+    // In a complete implementation, we'd include small test files
+    // or generate them programmatically
+}
