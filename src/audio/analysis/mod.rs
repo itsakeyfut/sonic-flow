@@ -1,8 +1,8 @@
 //! Audio analysis and spectrum processing
 
 pub mod fft;
-pub mod spectrum;
-pub mod meter;
+// pub mod spectrum;
+// pub mod meter;
 
 use std::time::Duration;
 
