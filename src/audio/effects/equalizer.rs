@@ -2,7 +2,6 @@
 
 use super::AudioEffect;
 use crate::error::AudioError;
-use crate::Result;
 
 /// Equalizer band configuration
 #[derive(Debug, Clone)]

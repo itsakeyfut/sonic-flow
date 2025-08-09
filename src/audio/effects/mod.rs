@@ -5,17 +5,10 @@ pub mod reverb;
 pub mod crossfade;
 
 use crate::error::AudioError;
-use crate::Result;
 
 /// Audio effect trait
 pub trait AudioEffect: Send + Sync {
     /// Apply the effect to an audio buffer
-    ///
-    /// # Arguments
-    ///
-    /// * `buffer` - Audio samples to process (in-place)
-    /// * `sample_rate` - Sample rate of the audio
-    /// * `channels` - Number of audio channels
     fn process(&mut self, buffer: &mut [f32], sample_rate: u32, channels: u16) -> Result<(), AudioError>;
 
     /// Reset the effect state

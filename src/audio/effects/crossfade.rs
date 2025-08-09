@@ -2,7 +2,6 @@
 
 use super::AudioEffect;
 use crate::error::AudioError;
-use crate::Result;
 use std::time::Duration;
 
 /// Crossfade effect for smooth track transitions
