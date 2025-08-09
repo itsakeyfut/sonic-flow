@@ -6,6 +6,7 @@ use tracing::{info, debug, error};
 use tokio::sync::RwLock;
 
 use crate::audio::{AudioEngine, AudioEngineBuilder};
+use crate::audio::traits::{PlaybackStatus, VolumeControl, TrackLoader};
 use crate::config::ConfigManager;
 use crate::{Result, Error};
 
@@ -22,8 +23,6 @@ pub struct AppController {
     event_bus: Arc<EventBus>,
     /// Application state
     app_state: Arc<RwLock<AppState>>,
-    /// Lifecycle manager
-    lifecycle_manager: LifecycleManager,
 }
 
 impl AppController {
@@ -46,7 +45,7 @@ impl AppController {
                 .with_buffer_size(1024)
                 .with_sample_rate(44100)
                 .build()
-                .map_err(|e| Error::Audio(e))?
+                .map_err(Error::Audio)?
         ));
         debug!("Audio engine initialized");
 
@@ -63,7 +62,6 @@ impl AppController {
             config_manager,
             event_bus,
             app_state,
-            lifecycle_manager,
         })
     }
 
@@ -71,14 +69,15 @@ impl AppController {
     pub async fn run(self) -> Result<()> {
         info!("Starting application controller main loop");
 
+        // Create lifecycle manager for shutdown handling
+        let lifecycle_manager = LifecycleManager::new();
+
         // Start background tasks
         let audio_task = self.start_audio_monitoring_task();
         let event_task = self.start_event_processing_task();
 
         // Wait for shutdown signal
-        let shutdown_task = tokio::spawn(async move {
-            self.lifecycle_manager.wait_for_shutdown().await
-        });
+        let shutdown_result = lifecycle_manager.wait_for_shutdown().await;
 
         // Wait for either shutdown signal or critical error
         tokio::select! {
@@ -96,11 +95,10 @@ impl AppController {
                     Err(e) => error!("Event processing task panicked: {}", e),
                 }
             }
-            result = shutdown_task => {
+            result = async { shutdown_result } => {
                 match result {
-                    Ok(Ok(())) => info!("Shutdown signal received"),
-                    Ok(Err(e)) => error!("Shutdown monitoring failed: {}", e),
-                    Err(e) => error!("Shutdown task panicked: {}", e),
+                    Ok(()) => info!("Shutdown signal received"),
+                    Err(e) => error!("Shutdown monitoring failed: {}", e),
                 }
             }
         }
@@ -210,8 +208,9 @@ impl AppController {
     async fn shutdown(&self) -> Result<()> {
         info!("Shutting down application controller");
 
-        // Perform cleanup operations
-        self.lifecycle_manager.shutdown().await?;
+        // Create a lifecycle manager for shutdown
+        let lifecycle_manager = LifecycleManager::new();
+        lifecycle_manager.shutdown().await?;
 
         debug!("Application controller shutdown completed");
         Ok(())
@@ -247,7 +246,6 @@ mod tests {
     async fn test_app_controller_creation() {
         let result = AppController::new().await;
         // This might fail in test environment due to audio system initialization
-        // In a complete test setup, we'd mock the audio system
         if result.is_err() {
             println!("AppController creation failed (expected in test environment): {:?}", result.err());
             return;
