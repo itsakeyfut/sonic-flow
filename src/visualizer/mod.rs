@@ -61,4 +61,9 @@ impl VisualizerSystem {
     pub fn get_frame(&self) -> Vec<u8> {
         self.engine.get_frame()
     }
+
+    /// Get canvas size
+    pub fn size(&self) -> (u32, u32) {
+        self.engine.canvas_size()
+    }
 }
