@@ -263,4 +263,24 @@ impl VisualizerEngine {
         self.send_command(VisualizerCommand::Stop)?;
         Ok(())
     }
+
+    /// Get current state
+    pub fn state(&self) -> VisualizerState {
+        *self.state.read()
+    }
+
+    /// Get current metrics
+    pub fn metrics(&self) -> VisualizerMetrics {
+        self.metrics.read().clone()
+    }
+
+    /// Get canvas pixels for display
+    pub fn get_frame(&self) -> Vec<u8> {
+        self.canvas.read().pixels().to_vec()
+    }
+
+    /// Get canvas size
+    pub fn canvas_size(&self) -> (u32, u32) {
+        self.canvas.read().size()
+    }
 }
