@@ -302,4 +302,11 @@ impl VisualizerEngine {
     pub fn available_visualizers(&self) -> Vec<String> {
         self.visualizers.read().keys().cloned().collect()
     }
+
+    /// Send command to worker
+    fn send_command(&self, command: VisualizerCommand) -> Result<(), VisualizerError> {
+        self.command_sender
+            .send(command)
+            .map_err(|_| VisualizerError::Rendering("Visualizer worker not available".to_string()))
+    }
 }
