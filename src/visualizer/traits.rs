@@ -78,3 +78,25 @@ pub struct VisualizationConfig {
     /// Custom parameters for specific visualizers
     pub custom_params: HashMap<String, PluginValue>,
 }
+
+/// Color scheme for visualizers
+#[derive(Debug, Clone)]
+pub struct ColorScheme {
+    /// Primary color
+    pub primary: Color,
+    /// Secondary color
+    pub secondary: Color,
+    /// Background color
+    pub background: Color,
+    /// Gradient colors (from low to high intensity)
+    pub gradient: Vec<Color>,
+}
+
+/// RGBA color representation
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
