@@ -39,3 +39,47 @@ macro_rules! register_visualizer {
         }
     };
 }
+
+/// Utility function to create all built-in visualizers
+pub fn create_builtin_visualizers() -> std::collections::HashMap<String, Box<dyn Fn() -> Box<dyn crate::visualizer::traits::Visualizer> + Send + Sync>> {
+    let mut visualizers = std::collections::HashMap::new();
+    
+    // Spectrum bars visualizer
+    visualizers.insert(
+        "spectrum_bars".to_string(),
+        Box::new(|| Box::new(SpectrumBarsVisualizer::new()))
+            as Box<dyn Fn() -> Box<dyn crate::visualizer::traits::Visualizer> + Send + Sync>,
+    );
+    
+    // TODO: Add more built-in visualizers here
+    // visualizers.insert("waveform".to_string(), Box::new(|| Box::new(WaveformVisualizer::new())));
+    // visualizers.insert("circle_spectrum".to_string(), Box::new(|| Box::new(CircleSpectrumVisualizer::new())));
+    
+    visualizers
+}
+
+/// Validate a visualizer implementation
+pub fn validate_visualizer(visualizer: &dyn crate::visualizer::traits::Visualizer) -> Result<(), String> {
+    let metadata = visualizer.metadata();
+    
+    // Check required fields
+    if metadata.id.is_empty() {
+        return Err("Visualizer ID cannot be empty".to_string());
+    }
+    
+    if metadata.name.is_empty() {
+        return Err("Visualizer name cannot be empty".to_string());
+    }
+    
+    if metadata.version.is_empty() {
+        return Err("Visualizer version cannot be empty".to_string());
+    }
+    
+    // Validate update rate
+    let update_rate = visualizer.preferred_update_rate();
+    if update_rate == 0 || update_rate > 240 {
+        return Err(format!("Invalid update rate: {} (must be 1-240 FPS)", update_rate));
+    }
+    
+    Ok(())
+}
