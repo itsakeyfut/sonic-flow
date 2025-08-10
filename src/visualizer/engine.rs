@@ -229,4 +229,14 @@ impl VisualizerEngine {
         self.send_command(VisualizerCommand::UpdateSpectrum(spectrum_data))?;
         Ok(())
     }
+
+   /// Resize the visualizer canvas
+    pub fn resize(&self, width: u32, height: u32) -> Result<(), VisualizerError> {
+        debug!("Resizing visualizer canvas to {}x{}", width, height);
+
+        self.canvas.write().resize(width, height);
+        self.send_command(VisualizerCommand::Resize(width, height))?;
+
+        Ok(())
+    }
 }
