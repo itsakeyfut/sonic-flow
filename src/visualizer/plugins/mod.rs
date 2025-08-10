@@ -88,7 +88,6 @@ pub fn validate_visualizer(visualizer: &dyn crate::visualizer::traits::Visualize
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::visualizer::traits::*;
     
     #[test]
     fn test_builtin_visualizers_creation() {

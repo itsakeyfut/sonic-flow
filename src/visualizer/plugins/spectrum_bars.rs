@@ -9,7 +9,7 @@ use std::time::Instant;
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
 use crate::visualizer::traits::{
-    BlendMode, Canvas, Color, ColorScheme, ConfigParameter, ParameterType, PluginValue, Point,
+    BlendMode, Canvas, Color, ConfigParameter, ParameterType, PluginValue, Point,
     Rect, VisualizationConfig, Visualizer, VisualizerMetadata,
 };
 

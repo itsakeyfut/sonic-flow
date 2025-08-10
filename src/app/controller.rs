@@ -1,18 +1,17 @@
 //! Main application controller
 
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
 use tracing::{info, debug, error};
 
-use crate::audio::{AudioEngine, AudioEngineBuilder, AudioEngineStatus};
+use crate::audio::{AudioEngine, AudioEngineBuilder};
 use crate::audio::traits::{PlaybackControl, VolumeControl, TrackLoader, PlaybackStatus, PlaybackState};
 use crate::config::ConfigManager;
-use crate::ui::{UiSystem, MainWindowBinding};
-use crate::visualizer::{VisualizerSystem, VisualizerState};
-use crate::{Result, Error, TrackId};
+use crate::ui::UiSystem;
+use crate::visualizer::{VisualizerSystem};
+use crate::{Result, Error};
 
 use super::state::{StateManager, AppState};
-use super::events::{AppEvent, EventBus, TrackInfo};
+use super::events::{AppEvent, EventBus};
 use super::lifecycle::LifecycleManager;
 
 /// Main application controller that orchestrates all subsystems

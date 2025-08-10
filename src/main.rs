@@ -8,7 +8,7 @@
 use std::error::Error;
 
 use sonic_flow::{Result, SonicFlow};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // slint::include_modules!();
@@ -112,8 +112,6 @@ fn init_logging() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_main_module_compiles() {
         // This test ensures the main module compiles correctly

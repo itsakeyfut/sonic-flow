@@ -2,20 +2,19 @@
 //! 
 //! The visualizer engine coordinates between audio analysis data and visualizer plugins to create real-time visual representations.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
 
 use super::canvas::SoftwareCanvas;
 use super::plugins::spectrum_bars::SpectrumBarsVisualizer;
-use super::traits::{Canvas, VisualizationConfig, Visualizer, VisualizerFactory, VisualizerRegistry};
+use super::traits::{Canvas, VisualizationConfig, Visualizer, VisualizerRegistry};
 
 /// Visualizer engine commands
 #[derive(Debug)]

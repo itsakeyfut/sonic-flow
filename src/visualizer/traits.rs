@@ -4,7 +4,6 @@
 //! the unified interface for the visualizer system.
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
