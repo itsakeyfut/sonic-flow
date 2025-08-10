@@ -1,5 +1,5 @@
 //! Visualizer traits and plugin API
-//! 
+//!
 //! This module defines the core traits for visualizer plugins and
 //! the unified interface for the visualizer system.
 
@@ -10,7 +10,7 @@ use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
 
 /// Visualizer plugin trait
-/// 
+///
 /// All visualizer implementations must implement this trait to be
 /// compatible with the Sonic Flow plugin system.
 pub trait Visualizer: Send + Sync {
@@ -135,8 +135,8 @@ pub enum ParameterType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PluginValue {
     Float(f32),
-    Integer(f32),
-    Boolean(f32),
+    Integer(i32),
+    Boolean(bool),
     String(String),
     Color(Color),
 }
@@ -155,7 +155,7 @@ pub trait Canvas {
     /// Draw a line
     fn draw_line(&mut self, start: Point, end: Point, color: Color, width: f32);
 
-    /// Draw a Circle
+    /// Draw a circle
     fn draw_circle(&mut self, center: Point, radius: f32, color: Color);
 
     /// Draw text
@@ -257,7 +257,7 @@ impl Rect {
         }
     }
 
-    /// Check if a point is inside the rectanble
+    /// Check if a point is inside the rectangle
     pub fn contains(&self, point: Point) -> bool {
         point.x >= self.x
             && point.x <= self.x + self.width
