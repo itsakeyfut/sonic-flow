@@ -256,4 +256,12 @@ impl Rect {
             y: self.y + self.height / 2.0,
         }
     }
+
+    /// Check if a point is inside the rectanble
+    pub fn contains(&self, point: Point) -> bool {
+        point.x >= self.x
+            && point.x <= self.x + self.width
+            && point.y >= self.y
+            && point.y <= self.y + self.height
+    }
 }
