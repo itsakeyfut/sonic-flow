@@ -288,4 +288,18 @@ impl VisualizerEngine {
     pub fn subscribe_events(&self) -> broadcast::Receiver<VisualizerEvent> {
         self.event_sender.subscribe()
     }
+
+    /// Register a new visualizer plugin
+    pub fn register_visualizer<F>(&self, id: String, factory: F)
+    where
+        F: Fn() -> Box<dyn Visualizer> + Send + Sync + 'static,
+    {
+        debug!("Registering visualizer plugin: {}", id);
+        self.visualizers.write().insert(id, Box::new(factory));
+    }
+
+    /// Get list of available visualizers
+    pub fn available_visualizers(&self) -> Vec<String> {
+        self.visualizers.read().keys().cloned().collect()
+    }
 }
