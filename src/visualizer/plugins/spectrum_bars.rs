@@ -156,4 +156,74 @@ impl SpectrumBarsVisualizer {
             self.frequency_bins.push(bin.min(spectrum_size - 1));
         }
     }
+
+    /// Update bar states with new spectrum data
+    fn update_bars(&mut self, spectrum_data: &SpectrumData) {
+        let now = Instant::now();
+        let dt = now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = now;
+
+        // Update frequency mapping if needed
+        if self.frequency_bins.len() != self.config.bar_count
+            || self.frequency_bins.is_empty()
+        {
+            self.update_frequency_mapping(spectrum_data.bands.len());
+        }
+
+        // Apply sensitivity multiplier
+        let sensitivity = self.vis_config.sensitivity;
+
+        for (i, bar) in self.bars.iter_mut().enumerate() {
+            // Get amplitude for this bar
+            let bin_index = self.frequency_bins.get(i).copied().unwrap_or(0);
+            let amplitude = spectrum_data
+                .bands
+                .get(bin_index)
+                .copied()
+                .unwrap_or(0.0)
+                * sensitivity;
+
+            // Update maximum amplitude for auto-gain
+            if self.vis_config.auto_gain {
+                self.max_amplitude = self.max_amplitude * 0.99 + amplitude * 0.01;
+                self.max_amplitude = self.max_amplitude.max(0.1); // Prevent division by zero
+            }
+
+            // Normalize amplitude
+            let normalized_amplitude = (amplitude / self.max_amplitude).clamp(0.0, 1.0);
+
+            // Update bar height
+            if normalized_amplitude > bar.height {
+                bar.height = normalized_amplitude;
+            } else if self.vis_config.smoothing {
+                // Smooth fall
+                let fall_rate = 2.0; // Bars per second
+                bar.height = (bar.height - fall_rate * dt).max(normalized_amplitude);
+            } else {
+                bar.height = normalized_amplitude;
+            }
+
+            // Update smoothed height for animation
+            if self.vis_config.smoothing {
+                let smoothing = self.smoothing_factor * self.vis_config.animation_speed;
+                bar.smoothed_height = bar.smoothed_height * smoothing + bar.height * (1.0 - smoothing);
+            } else {
+                bar.smoothed_height = bar.height;
+            }
+
+            // Update peak hold
+            if self.config.show_peaks {
+                if normalized_amplitude > bar.peak_height {
+                    bar.peak_height = normalized_amplitude;
+                    bar.peak_hold_start = now;
+                } else {
+                    let hold_elapsed = now.duration_since(bar.peak_hold_start).as_secs_f32();
+                    if hold_elapsed > self.config.peak_hold_time {
+                        bar.peak_height = (bar.peak_height - self.config.peak_fall_speed * dt)
+                            .max(bar.height);
+                    }
+                }
+            }
+        }
+    }
 }
