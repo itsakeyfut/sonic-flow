@@ -205,4 +205,9 @@ impl Color {
     pub fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
+
+    /// Create a grayscale color
+    pub fn gray(value: f32) -> Self {
+        Self::rgb(value, value, value)
+    }
 }
