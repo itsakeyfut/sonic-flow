@@ -306,3 +306,72 @@ impl Canvas for SoftwareCanvas {
         self.blend_mode = mode;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canvas_creation() {
+        let canvas = SoftwareCanvas::new(800, 600);
+        assert_eq!(canvas.size(), (800, 600));
+        assert_eq!(canvas.pixels.len(), 800 * 600 * 4);
+    }
+
+    #[test]
+    fn test_canvas_clear() {
+        let mut canvas = SoftwareCanvas::new(100, 100);
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        
+        canvas.clear(red);
+        
+        // Check a few pixels
+        assert_eq!(canvas.get_pixel(0, 0), red);
+        assert_eq!(canvas.get_pixel(50, 50), red);
+        assert_eq!(canvas.get_pixel(99, 99), red);
+    }
+
+    #[test]
+    fn test_draw_rect() {
+        let mut canvas = SoftwareCanvas::new(100, 100);
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        
+        canvas.clear(Color::rgb(0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::new(10.0, 10.0, 20.0, 20.0), blue);
+        
+        // Check that pixels inside the rect are blue
+        assert_eq!(canvas.get_pixel(15, 15), blue);
+        assert_eq!(canvas.get_pixel(25, 25), blue);
+        
+        // Check that pixels outside the rect are black
+        assert_eq!(canvas.get_pixel(5, 5), Color::rgb(0.0, 0.0, 0.0));
+        assert_eq!(canvas.get_pixel(35, 35), Color::rgb(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_blend_modes() {
+        let mut canvas = SoftwareCanvas::new(100, 100);
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let green = Color::rgb(0.0, 1.0, 0.0);
+        
+        // Set base color
+        canvas.set_pixel(50, 50, red);
+        
+        // Test additive blending
+        canvas.set_blend_mode(BlendMode::Add);
+        canvas.set_pixel(50, 50, green);
+        
+        let result = canvas.get_pixel(50, 50);
+        assert!(result.r > 0.0 && result.g > 0.0); // Should have both red and green
+    }
+
+    #[test]
+    fn test_resize() {
+        let mut canvas = SoftwareCanvas::new(100, 100);
+        assert_eq!(canvas.size(), (100, 100));
+        
+        canvas.resize(200, 150);
+        assert_eq!(canvas.size(), (200, 150));
+        assert_eq!(canvas.pixels.len(), 200 * 150 * 4);
+    }
+}
