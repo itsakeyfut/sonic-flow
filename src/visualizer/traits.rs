@@ -183,3 +183,12 @@ pub struct Point {
     pub x: f32,
     pub y: f32,
 }
+
+/// Blend modes for rendering
+#[derive(Debug, Clone, Copy)]
+pub enum BlendMode {
+    Normal,
+    Add,
+    Multiply,
+    Screen,
+}
