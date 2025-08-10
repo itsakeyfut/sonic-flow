@@ -41,4 +41,14 @@ impl VisualizerSystem {
     pub fn engine(&self) -> &VisualizerEngine {
         &self.engine
     }
+
+    /// Start visualization
+    pub fn start(&self) -> Result<(), VisualizerError> {
+        self.engine.start()
+    }
+    
+    /// Stop visualization
+    pub fn stop(&self) -> Result<(), VisualizerError> {
+        self.engine.stop()
+    }
 }
