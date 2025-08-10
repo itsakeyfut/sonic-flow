@@ -312,3 +312,39 @@ impl Default for ColorScheme {
         }
     }
 }
+
+impl From<f32> for PluginValue {
+    fn from(value: f32) -> Self {
+        PluginValue::Float(value)
+    }
+}
+
+impl From<i32> for PluginValue {
+    fn from(value: i32) -> Self {
+        PluginValue::Integer(value)
+    }
+}
+
+impl From<bool> for PluginValue {
+    fn from(value: bool) -> Self {
+        PluginValue::Boolean(value)
+    }
+}
+
+impl From<String> for PluginValue {
+    fn from(value: String) -> Self {
+        PluginValue::String(value)
+    }
+}
+
+impl From<&str> for PluginValue {
+    fn from(value: &str) -> Self {
+        PluginValue::String(value.to_string())
+    }
+}
+
+impl From<Color> for PluginValue {
+    fn from(value: Color) -> Self {
+        PluginValue::Color(value)
+    }
+}
