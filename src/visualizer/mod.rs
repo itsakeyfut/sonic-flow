@@ -36,4 +36,9 @@ impl VisualizerSystem {
         
         Ok(Self { engine })
     }
+
+    /// Get reference to the engine
+    pub fn engine(&self) -> &VisualizerEngine {
+        &self.engine
+    }
 }
