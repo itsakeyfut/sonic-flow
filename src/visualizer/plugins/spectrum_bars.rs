@@ -405,3 +405,244 @@ impl Default for BarState {
         }
     }
 }
+
+impl Visualizer for SpectrumBarsVisualizer {
+    fn metadata(&self) -> VisualizerMetadata {
+        VisualizerMetadata {
+            id: "spectrum_bars".to_string(),
+            name: "Spectrum Bars".to_string(),
+            version: "1.0.0".to_string(),
+            author: "Sonic Flow Team".to_string(),
+            description: "Classic frequency spectrum visualization with vertical bars".to_string(),
+            config_schema: vec![
+                ConfigParameter {
+                    name: "bar_count".to_string(),
+                    label: "Number of Bars".to_string(),
+                    param_type: ParameterType::Integer,
+                    default_value: PluginValue::Integer(64),
+                    min_value: Some(PluginValue::Integer(8)),
+                    max_value: Some(PluginValue::Integer(256)),
+                    description: "Number of frequency bars to display".to_string(),
+                },
+                ConfigParameter {
+                    name: "bar_width_ratio".to_string(),
+                    label: "Bar Width Ratio".to_string(),
+                    param_type: ParameterType::Float,
+                    default_value: PluginValue::Float(0.8),
+                    min_value: Some(PluginValue::Float(0.1)),
+                    max_value: Some(PluginValue::Float(1.0)),
+                    description: "Width ratio of bars (1.0 = no gaps)".to_string(),
+                },
+                ConfigParameter {
+                    name: "show_peaks".to_string(),
+                    label: "Show Peak Indicators".to_string(),
+                    param_type: ParameterType::Boolean,
+                    default_value: PluginValue::Boolean(true),
+                    min_value: None,
+                    max_value: None,
+                    description: "Display peak hold indicators".to_string(),
+                },
+                ConfigParameter {
+                    name: "logarithmic_scale".to_string(),
+                    label: "Logarithmic Frequency Scale".to_string(),
+                    param_type: ParameterType::Boolean,
+                    default_value: PluginValue::Boolean(true),
+                    min_value: None,
+                    max_value: None,
+                    description: "Use logarithmic frequency distribution".to_string(),
+                },
+                ConfigParameter {
+                    name: "bar_style".to_string(),
+                    label: "Bar Style".to_string(),
+                    param_type: ParameterType::Enum(vec![
+                        "Solid".to_string(),
+                        "Outlined".to_string(),
+                        "Rounded".to_string(),
+                        "Line".to_string(),
+                    ]),
+                    default_value: PluginValue::String("Solid".to_string()),
+                    min_value: None,
+                    max_value: None,
+                    description: "Visual style of the bars".to_string(),
+                },
+                ConfigParameter {
+                    name: "peak_hold_time".to_string(),
+                    label: "Peak Hold Time (seconds)".to_string(),
+                    param_type: ParameterType::Float,
+                    default_value: PluginValue::Float(1.0),
+                    min_value: Some(PluginValue::Float(0.0)),
+                    max_value: Some(PluginValue::Float(5.0)),
+                    description: "How long peaks are held before falling".to_string(),
+                },
+                ConfigParameter {
+                    name: "peak_fall_speed".to_string(),
+                    label: "Peak Fall Speed".to_string(),
+                    param_type: ParameterType::Float,
+                    default_value: PluginValue::Float(0.5),
+                    min_value: Some(PluginValue::Float(0.1)),
+                    max_value: Some(PluginValue::Float(2.0)),
+                    description: "Speed at which peaks fall".to_string(),
+                },
+                ConfigParameter {
+                    name: "min_bar_height".to_string(),
+                    label: "Minimum Bar Height".to_string(),
+                    param_type: ParameterType::Float,
+                    default_value: PluginValue::Float(0.02),
+                    min_value: Some(PluginValue::Float(0.0)),
+                    max_value: Some(PluginValue::Float(0.5)),
+                    description: "Minimum height of bars as fraction of canvas".to_string(),
+                },
+                ConfigParameter {
+                    name: "max_bar_height".to_string(),
+                    label: "Maximum Bar Height".to_string(),
+                    param_type: ParameterType::Float,
+                    default_value: PluginValue::Float(0.95),
+                    min_value: Some(PluginValue::Float(0.5)),
+                    max_value: Some(PluginValue::Float(1.0)),
+                    description: "Maximum height of bars as fraction of canvas".to_string(),
+                },
+                ConfigParameter {
+                    name: "gradient_direction".to_string(),
+                    label: "Gradient Direction".to_string(),
+                    param_type: ParameterType::Enum(vec![
+                        "None".to_string(),
+                        "Vertical".to_string(),
+                        "Horizontal".to_string(),
+                        "Radial".to_string(),
+                    ]),
+                    default_value: PluginValue::String("Vertical".to_string()),
+                    min_value: None,
+                    max_value: None,
+                    description: "Direction of color gradient".to_string(),
+                },
+            ],
+        }
+    }
+
+    fn initialize(&mut self, config: &VisualizationConfig) -> Result<(), VisualizerError> {
+        self.vis_config = config.clone();
+        
+        // Initialize bars array with new count if changed
+        if self.bars.len() != self.config.bar_count {
+            self.bars = vec![BarState::default(); self.config.bar_count];
+        }
+
+        // Reset frequency mapping
+        self.frequency_bins.clear();
+        
+        Ok(())
+    }
+
+    fn update(&mut self, spectrum_data: &SpectrumData) -> Result<(), VisualizerError> {
+        self.update_bars(spectrum_data);
+        Ok(())
+    }
+
+    fn render(&self, canvas: &mut dyn Canvas) -> Result<(), VisualizerError> {
+        self.render_bars(canvas);
+        Ok(())
+    }
+
+    fn configure(&mut self, settings: &HashMap<String, PluginValue>) -> Result<(), VisualizerError> {
+        // Update configuration based on settings
+        for (key, value) in settings {
+            match key.as_str() {
+                "bar_count" => {
+                    if let PluginValue::Integer(count) = value {
+                        let count = (*count as usize).clamp(8, 256);
+                        if count != self.config.bar_count {
+                            self.config.bar_count = count;
+                            self.bars = vec![BarState::default(); count];
+                            self.frequency_bins.clear();
+                        }
+                    }
+                }
+                "bar_width_ratio" => {
+                    if let PluginValue::Float(ratio) = value {
+                        self.config.bar_width_ratio = ratio.clamp(0.1, 1.0);
+                    }
+                }
+                "show_peaks" => {
+                    if let PluginValue::Boolean(show) = value {
+                        self.config.show_peaks = *show;
+                    }
+                }
+                "logarithmic_scale" => {
+                    if let PluginValue::Boolean(log_scale) = value {
+                        if *log_scale != self.config.logarithmic_scale {
+                            self.config.logarithmic_scale = *log_scale;
+                            self.frequency_bins.clear(); // Force remapping
+                        }
+                    }
+                }
+                "bar_style" => {
+                    if let PluginValue::String(style) = value {
+                        self.config.bar_style = match style.as_str() {
+                            "Outlined" => BarStyle::Outlined,
+                            "Rounded" => BarStyle::Rounded,
+                            "Line" => BarStyle::Line,
+                            _ => BarStyle::Solid,
+                        };
+                    }
+                }
+                "peak_hold_time" => {
+                    if let PluginValue::Float(time) = value {
+                        self.config.peak_hold_time = time.clamp(0.0, 5.0);
+                    }
+                }
+                "peak_fall_speed" => {
+                    if let PluginValue::Float(speed) = value {
+                        self.config.peak_fall_speed = speed.clamp(0.1, 2.0);
+                    }
+                }
+                "min_bar_height" => {
+                    if let PluginValue::Float(height) = value {
+                        self.config.min_bar_height = height.clamp(0.0, 0.5);
+                    }
+                }
+                "max_bar_height" => {
+                    if let PluginValue::Float(height) = value {
+                        self.config.max_bar_height = height.clamp(0.5, 1.0);
+                    }
+                }
+                "gradient_direction" => {
+                    if let PluginValue::String(direction) = value {
+                        self.config.gradient_direction = match direction.as_str() {
+                            "Horizontal" => GradientDirection::Horizontal,
+                            "Radial" => GradientDirection::Radial,
+                            "None" => GradientDirection::None,
+                            _ => GradientDirection::Vertical,
+                        };
+                    }
+                }
+                _ => {
+                    // Unknown setting, ignore
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn reset(&mut self) {
+        // Reset all bar states
+        for bar in &mut self.bars {
+            bar.height = 0.0;
+            bar.peak_height = 0.0;
+            bar.smoothed_height = 0.0;
+            bar.peak_hold_start = Instant::now();
+        }
+
+        // Reset timing
+        self.last_update = Instant::now();
+        self.max_amplitude = 1.0;
+    }
+
+    fn supports_realtime(&self) -> bool {
+        true
+    }
+
+    fn preferred_update_rate(&self) -> u32 {
+        60 // 60 FPS
+    }
+}
