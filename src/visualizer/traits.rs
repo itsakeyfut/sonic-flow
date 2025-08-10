@@ -265,3 +265,10 @@ impl Rect {
             && point.y <= self.y + self.height
     }
 }
+
+impl Point {
+    /// Create a new point
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
