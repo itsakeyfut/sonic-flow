@@ -394,3 +394,14 @@ impl Default for SpectrumBarsConfig {
         }
     }
 }
+
+impl Default for BarState {
+    fn default() -> Self {
+        Self {
+            height: 0.0,
+            peak_height: 0.0,
+            peak_hold_start: Instant::now(),
+            smoothed_height: 0.0,
+        }
+    }
+}
