@@ -48,3 +48,18 @@ pub enum VisualizerEvent {
     /// Error occurred
     Error { error: String },
 }
+
+/// Performance metrics for the visualizer
+#[derive(Debug, Clone)]
+pub struct VisualizerMetrics {
+    /// Current FPS
+    pub fps: f32,
+    /// Average frame time
+    pub avg_frame_time: Duration,
+    /// Peak frame time
+    pub peak_frame_time: Duration,
+    /// Number of dropped frames
+    pub dropped_frames: u32,
+    /// Total frames rendered
+    pub total_frames: u64,
+}
