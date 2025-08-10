@@ -47,8 +47,9 @@ pub fn create_builtin_visualizers() -> std::collections::HashMap<String, Box<dyn
     // Spectrum bars visualizer
     visualizers.insert(
         "spectrum_bars".to_string(),
-        Box::new(|| Box::new(SpectrumBarsVisualizer::new()))
-            as Box<dyn Fn() -> Box<dyn crate::visualizer::traits::Visualizer> + Send + Sync>,
+        Box::new(|| -> Box<dyn Visualizer> {
+            Box::new(SpectrumBarsVisualizer::new())
+        }) as Box<dyn Fn() -> Box<dyn crate::visualizer::traits::Visualizer> + Send + Sync>,
     );
     
     // TODO: Add more built-in visualizers here

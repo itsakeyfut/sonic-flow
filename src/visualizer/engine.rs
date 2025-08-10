@@ -144,8 +144,9 @@ impl VisualizerEngine {
             let mut registry = visualizers.write();
             registry.insert(
                 "spectrum_bars".to_string(),
-                Box::new(|| Box::new(SpectrumBarsVisualizer::new()))
-                    as Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>,
+                Box::new(|| -> Box<dyn Visualizer> {
+                    Box::new(SpectrumBarsVisualizer::new())
+                }) as Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>,
             );
         }
 
