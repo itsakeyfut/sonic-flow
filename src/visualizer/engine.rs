@@ -120,3 +120,65 @@ struct VisualizerWorker {
     /// Target frame duration
     target_frame_duration: Duration,
 }
+
+impl VisualizerEngine {
+    /// Create a new visualizer engine
+    pub fn new(width: u32, height: u32) -> Result<Self, VisualizerError> {
+        info!("Initializing visualizer engine ({}x{})", width, height);
+
+        // Create communication channels
+        let (command_sender, command_receiver) = mpsc::unbounded_channel();
+        let (event_sender, _) = broadcast::channel(100);
+
+        // Initialize shared state
+        let state = Arc::new(RwLock::new(VisualizerState::Stopped));
+        let active_visualizer = Arc::new(RwLock::new(None));
+        let config = Arc::new(RwLock::new(VisualizationConfig::default()));
+        let canvas = Arc::new(RwLock::new(SoftwareCanvas::new(width, height)));
+        let metrics = Arc::new(RwLock::new(VisualizerMetrics::default()));
+        let last_spectrum = Arc::new(RwLock::new(None));
+
+        // Create visualizer registry with built-in visualizers
+        let visualizers = Arc::new(RwLock::new(HashMap::new()));
+        {
+            let mut registry = visualizers.write();
+            registry.insert(
+                "spectrum_bars".to_string(),
+                Box::new(|| Box::new(SpectrumBarsVisualizer::new()))
+                    as Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>,
+            );
+        }
+
+        // Start worker thread
+        let worker = VisualizerWorker {
+            state: Arc::clone(&state),
+            active_visualizer: Arc::clone(&active_visualizer),
+            config: Arc::clone(&config),
+            canvas: Arc::clone(&canvas),
+            command_receiver,
+            event_sender: event_sender.clone(),
+            metrics: Arc::clone(&metrics),
+            last_spectrum: Arc::clone(&last_spectrum),
+            last_frame_time: Instant::now(),
+            target_frame_duration: Duration::from_millis(16), // 60 FPS
+        };
+
+        tokio::spawn(async move {
+            worker.run().await;
+        });
+
+        debug!("Visualizer engine initialized successfully");
+
+        Ok(Self {
+            state,
+            active_visualizer,
+            visualizers,
+            config,
+            canvas,
+            command_sender,
+            event_sender,
+            metrics,
+            last_spectrum,
+        })
+    }
+}
