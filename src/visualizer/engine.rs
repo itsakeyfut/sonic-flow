@@ -63,3 +63,14 @@ pub struct VisualizerMetrics {
     /// Total frames rendered
     pub total_frames: u64,
 }
+
+/// Current state of the visualizer engine
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VisualizerState {
+    /// Stopped and idle
+    Stopped,
+    /// Running and rendering
+    Running,
+    /// Paused (maintaining state but not rendering)
+    Paused,
+}
