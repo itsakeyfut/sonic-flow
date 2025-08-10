@@ -119,3 +119,14 @@ pub struct ConfigParameter {
     /// Description
     pub description: String,
 }
+
+/// Parameter types for configuration
+#[derive(Debug, Clone)]
+pub enum ParameterType {
+    Float,
+    Integer,
+    Boolean,
+    String,
+    Color,
+    Enum(Vec<String>),
+}
