@@ -226,4 +226,154 @@ impl SpectrumBarsVisualizer {
             }
         }
     }
+
+    /// Render the spectrum bars
+    fn render_bars(&self, canvas: &mut dyn Canvas) {
+        let (canvas_width, canvas_height) = canvas.size();
+        let canvas_width = canvas_width as f32;
+        let canvas_height = canvas_height as f32;
+
+        // Calculate bar dimensions
+        let total_bar_width = canvas_width / self.config.bar_count as f32;
+        let bar_width = total_bar_width * self.config.bar_width_ratio;
+        let bar_spacing = total_bar_width - bar_width;
+
+        let min_height = canvas_height * self.config.min_bar_height;
+        let max_height = canvas_height * self.config.max_bar_height;
+        let height_range = max_height - min_height;
+
+        // Set blend mode
+        canvas.set_blend_mode(BlendMode::Normal);
+
+        for (i, bar) in self.bars.iter().enumerate() {
+            let x = i as f32 * total_bar_width + bar_spacing / 2.0;
+            let height = min_height + bar.smoothed_height * height_range;
+            let y = canvas_height - height;
+
+            // Calculate bar color
+            let color = self.calculate_bar_color(bar.smoothed_height, i);
+
+            // Render bar based on style
+            match self.config.bar_style {
+                BarStyle::Solid => self.render_solid_bar(canvas, x, y, bar_width, height, color),
+                BarStyle::Outlined => self.render_outlined_bar(canvas, x, y, bar_width, height, color),
+                BarStyle::Rounded => self.render_rounded_bar(canvas, x, y, bar_width, height, color),
+                BarStyle::Line => self.render_line_bar(canvas, x, y, bar_width, height, color),
+            }
+
+            // Render peak indicator
+            if self.config.show_peaks && bar.peak_height > bar.smoothed_height {
+                let peak_y = canvas_height - (min_height + bar.peak_height * height_range);
+                let peak_color = Color::rgba(color.r, color.g, color.b, 0.8);
+                
+                canvas.draw_line(
+                    Point::new(x, peak_y),
+                    Point::new(x + bar_width, peak_y),
+                    peak_color,
+                    2.0,
+                );
+            }
+        }
+    }
+
+    /// Calculate color for a bar based on amplitude and position
+    fn calculate_bar_color(&self, amplitude: f32, bar_index: usize) -> Color {
+        match self.config.gradient_direction {
+            GradientDirection::None => self.vis_config.color_scheme.primary,
+            GradientDirection::Vertical => {
+                // Color based on amplitude
+                self.interpolate_gradient_color(amplitude)
+            }
+            GradientDirection::Horizontal => {
+                // Color based on position
+                let position = bar_index as f32 / self.config.bar_count as f32;
+                self.interpolate_gradient_color(position)
+            }
+            GradientDirection::Radial => {
+                // Color based on distance from center
+                let center = self.config.bar_count as f32 / 2.0;
+                let distance = (bar_index as f32 - center).abs() / center;
+                self.interpolate_gradient_color(distance)
+            }
+        }
+    }
+    /// Interpolate color from gradient
+    fn interpolate_gradient_color(&self, t: f32) -> Color {
+        let t = t.clamp(0.0, 1.0);
+        let gradient = &self.vis_config.color_scheme.gradient;
+
+        if gradient.is_empty() {
+            return self.vis_config.color_scheme.primary;
+        }
+
+        if gradient.len() == 1 {
+            return gradient[0];
+        }
+
+        let scaled = t * (gradient.len() - 1) as f32;
+        let index = scaled.floor() as usize;
+        let frac = scaled - index as f32;
+
+        let color1 = gradient[index];
+        let color2 = gradient.get(index + 1).copied().unwrap_or(color1);
+
+        Color::rgba(
+            color1.r + (color2.r - color1.r) * frac,
+            color1.g + (color2.g - color1.g) * frac,
+            color1.b + (color2.b - color1.b) * frac,
+            color1.a + (color2.a - color1.a) * frac,
+        )
+    }
+
+    /// Render a solid bar
+    fn render_solid_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+        canvas.draw_rect(Rect::new(x, y, width, height), color);
+    }
+
+    /// Render an outlined bar
+    fn render_outlined_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+        // Fill with transparent version
+        let fill_color = Color::rgba(color.r, color.g, color.b, 0.3);
+        canvas.draw_rect(Rect::new(x, y, width, height), fill_color);
+
+        // Draw outline
+        let outline_width = 1.0;
+        let bottom_y = y + height;
+        
+        // Top
+        canvas.draw_line(Point::new(x, y), Point::new(x + width, y), color, outline_width);
+        // Bottom
+        canvas.draw_line(Point::new(x, bottom_y), Point::new(x + width, bottom_y), color, outline_width);
+        // Left
+        canvas.draw_line(Point::new(x, y), Point::new(x, bottom_y), color, outline_width);
+        // Right
+        canvas.draw_line(Point::new(x + width, y), Point::new(x + width, bottom_y), color, outline_width);
+    }
+
+    /// Render a rounded bar (simplified as regular rect for now)
+    fn render_rounded_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+        // TODO: Implement actual rounded corners
+        // For now, just draw a solid bar with slightly smaller dimensions for visual effect
+        let corner_radius = width.min(height) * 0.1;
+        let adjusted_rect = Rect::new(
+            x + corner_radius * 0.5,
+            y + corner_radius * 0.5,
+            width - corner_radius,
+            height - corner_radius,
+        );
+        canvas.draw_rect(adjusted_rect, color);
+    }
+
+    /// Render a line bar
+    fn render_line_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+        let center_x = x + width / 2.0;
+        let bottom_y = y + height;
+        
+        canvas.draw_line(
+            Point::new(center_x, bottom_y),
+            Point::new(center_x, y),
+            color,
+            width.min(4.0),
+        );
+    }
 }
