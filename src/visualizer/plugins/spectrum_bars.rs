@@ -377,3 +377,20 @@ impl SpectrumBarsVisualizer {
         );
     }
 }
+
+impl Default for SpectrumBarsConfig {
+    fn default() -> Self {
+        Self {
+            bar_count: 64,
+            bar_width_ratio: 0.8,
+            min_bar_height: 0.02,
+            max_bar_height: 0.95,
+            peak_hold_time: 1.0,
+            peak_fall_speed: 0.5,
+            show_peaks: true,
+            logarithmic_scale: true,
+            bar_style: BarStyle::Solid,
+            gradient_direction: GradientDirection::Vertical,
+        }
+    }
+}
