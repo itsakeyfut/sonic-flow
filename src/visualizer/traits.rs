@@ -59,3 +59,22 @@ pub struct VisualizerMetadata {
     /// Configuration schema
     pub config_schema: Vec<ConfigParameter>,
 }
+
+/// Visualization configuration
+#[derive(Debug, Clone)]
+pub struct VisualizationConfig {
+    /// Sensitivity multiplier (0.0 - 2.0)
+    pub sensitivity: f32,
+    /// Frequency range for analysis (Hz)
+    pub frequency_range: (f32, f32),
+    /// Color scheme
+    pub color_scheme: ColorScheme,
+    /// Animation speed multiplier
+    pub animation_speed: f32,
+    /// Enable smoothing
+    pub smoothing: bool,
+    /// Auto gain control
+    pub auto_gain: bool,
+    /// Custom parameters for specific visualizers
+    pub custom_params: HashMap<String, PluginValue>,
+}
