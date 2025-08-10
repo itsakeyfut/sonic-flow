@@ -100,3 +100,22 @@ pub struct Color {
     pub b: f32,
     pub a: f32,
 }
+
+/// Configuration parameter for plugin configuration
+#[derive(Debug, Clone)]
+pub struct ConfigParameter {
+    /// Parameter name
+    pub name: String,
+    /// Human-readable label
+    pub label: String,
+    /// Parameter type
+    pub param_type: ParameterType,
+    /// Default value
+    pub default_value: PluginValue,
+    /// Minimum value (for numeric types)
+    pub min_value: Option<PluginValue>,
+    /// Maximum value (for numeric types)
+    pub max_value: Option<PluginValue>,
+    /// Description
+    pub description: String,
+}
