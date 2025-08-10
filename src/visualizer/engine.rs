@@ -480,3 +480,15 @@ impl VisualizerWorker {
         }
     }
 }
+
+impl Default for VisualizerMetrics {
+    fn default() -> Self {
+        Self {
+            fps: 0.0,
+            avg_frame_time: Duration::ZERO,
+            peak_frame_time: Duration::ZERO,
+            dropped_frames: 0,
+            total_frames: 0,
+        }
+    }
+}
