@@ -271,4 +271,11 @@ impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
+
+    /// Calculate distance to another point
+    pub fn distance_to(&self, other: Point) -> f32 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
 }
