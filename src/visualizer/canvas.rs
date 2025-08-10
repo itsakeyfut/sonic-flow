@@ -129,4 +129,18 @@ impl SoftwareCanvas {
             self.set_pixel(x, y as u32, color);
         }
     }
+
+    /// Fill a rectangle region
+    fn fill_rect_region(&mut self, rect: Rect, color: Color) {
+        let start_x = rect.x.max(0.0) as u32;
+        let start_y = rect.y.max(0.0) as u32;
+        let end_x = (rect.x + rect.width).min(self.width as f32) as u32;
+        let end_y = (rect.y + rect.height).min(self.height as f32) as u32;
+
+        for y in start_y..end_y {
+            for x in start_x..end_x {
+                self.set_pixel(x, y, color);
+            }
+        }
+    }
 }
