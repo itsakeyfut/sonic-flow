@@ -4,7 +4,6 @@
 //! the unified interface for the visualizer system.
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
@@ -27,7 +26,8 @@ pub trait Visualizer: Send + Sync {
     fn render(&self, canvas: &mut dyn Canvas) -> Result<(), VisualizerError>;
 
     /// Configure the visualizer with new settings
-    fn configure(&mut self, settings: &HashMap<String, PluginValue>) -> Result<(), VisualizerError>;
+    fn configure(&mut self, settings: &HashMap<String, PluginValue>)
+        -> Result<(), VisualizerError>;
 
     /// Reset the visualizer state
     fn reset(&mut self);
@@ -246,7 +246,12 @@ impl Color {
 impl Rect {
     /// Create a new rectangle
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Get the center point of the rectangle
@@ -297,17 +302,17 @@ impl Default for VisualizationConfig {
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
-            primary: Color::rgb(0.58, 0.2, 0.91), // Purple
-            secondary: Color::rgb(0.23, 0.51, 0.96), // Blue
+            primary: Color::rgb(0.58, 0.2, 0.91),     // Purple
+            secondary: Color::rgb(0.23, 0.51, 0.96),  // Blue
             background: Color::rgb(0.07, 0.07, 0.07), // Dark gray
             gradient: vec![
-                Color::rgb(0.0, 0.0, 0.5),   // Dark blue
-                Color::rgb(0.0, 0.5, 1.0),   // Blue
-                Color::rgb(0.0, 1.0, 1.0),   // Cyan
-                Color::rgb(0.5, 1.0, 0.0),   // Green-yellow
-                Color::rgb(1.0, 1.0, 0.0),   // Yellow
-                Color::rgb(1.0, 0.5, 0.0),   // Orange
-                Color::rgb(1.0, 0.0, 0.0),   // Red
+                Color::rgb(0.0, 0.0, 0.5), // Dark blue
+                Color::rgb(0.0, 0.5, 1.0), // Blue
+                Color::rgb(0.0, 1.0, 1.0), // Cyan
+                Color::rgb(0.5, 1.0, 0.0), // Green-yellow
+                Color::rgb(1.0, 1.0, 0.0), // Yellow
+                Color::rgb(1.0, 0.5, 0.0), // Orange
+                Color::rgb(1.0, 0.0, 0.0), // Red
             ],
         }
     }

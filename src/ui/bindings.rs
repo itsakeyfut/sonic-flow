@@ -2,15 +2,15 @@
 //!
 //! Connects Slint UI components with Rust business logic.
 
+use slint::{ComponentHandle, Weak};
 use std::sync::Arc;
 use std::time::Duration;
-use slint::{ComponentHandle, Weak};
-use tracing::{info, debug, error, warn};
+use tracing::{debug, error, info, warn};
 
-use crate::audio::{AudioEngine, AudioEngineStatus};
-use crate::audio::traits::{PlaybackControl, VolumeControl, PlaybackStatus, PlaybackState};
-use crate::app::{AppEvent, EventBus};
 use crate::app::events::TrackInfo;
+use crate::app::{AppEvent, EventBus};
+use crate::audio::traits::{PlaybackControl, PlaybackState, PlaybackStatus, VolumeControl};
+use crate::audio::{AudioEngine, AudioEngineStatus};
 use crate::error::{Result, UiError};
 
 // Include Slint-generated components
@@ -120,7 +120,9 @@ impl MainWindowBinding {
             let event_bus = event_bus.clone();
             move |position| {
                 debug!("Seek to position: {:.2}", position);
-                if let Err(e) = event_bus.publish(AppEvent::PlaybackPositionChanged(position as f64)) {
+                if let Err(e) =
+                    event_bus.publish(AppEvent::PlaybackPositionChanged(position as f64))
+                {
                     error!("Failed to publish seek event: {}", e);
                 }
             }
@@ -131,7 +133,9 @@ impl MainWindowBinding {
             let event_bus = event_bus.clone();
             move |visualizer_type| {
                 debug!("Visualizer changed to: {}", visualizer_type);
-                if let Err(e) = event_bus.publish(AppEvent::VisualizerChanged(visualizer_type.to_string())) {
+                if let Err(e) =
+                    event_bus.publish(AppEvent::VisualizerChanged(visualizer_type.to_string()))
+                {
                     error!("Failed to publish visualizer change event: {}", e);
                 }
             }
@@ -193,8 +197,10 @@ impl MainWindowBinding {
         };
 
         self.window.set_progress(progress);
-        self.window.set_position_text(format_duration(position).into());
-        self.window.set_duration_text(format_duration(duration).into());
+        self.window
+            .set_position_text(format_duration(position).into());
+        self.window
+            .set_duration_text(format_duration(duration).into());
     }
 
     /// Update the selected visualizer type in the UI
@@ -204,14 +210,16 @@ impl MainWindowBinding {
 
     /// Show the main window
     pub fn show(&self) -> Result<()> {
-        self.window.show()
+        self.window
+            .show()
             .map_err(|e| UiError::Slint(format!("Failed to show window: {}", e)))?;
         Ok(())
     }
 
     /// Hide the main window
     pub fn hide(&self) -> Result<()> {
-        self.window.hide()
+        self.window
+            .hide()
             .map_err(|e| UiError::Slint(format!("Failed to hide window: {}", e)))?;
         Ok(())
     }
@@ -219,7 +227,8 @@ impl MainWindowBinding {
     /// Run the main window event loop (blocking)
     pub fn run(&self) -> Result<()> {
         info!("Running main window");
-        self.window.run()
+        self.window
+            .run()
             .map_err(|e| UiError::Slint(format!("Window run failed: {}", e)))?;
         Ok(())
     }

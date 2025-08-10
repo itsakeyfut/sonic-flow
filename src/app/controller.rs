@@ -1,34 +1,35 @@
 //! Main application controller
 
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
-use tracing::{info, debug, error};
+use tracing::{debug, error, info};
 
-use crate::audio::{AudioEngine, AudioEngineBuilder, AudioEngineStatus};
-use crate::audio::traits::{PlaybackControl, VolumeControl, TrackLoader, PlaybackStatus, PlaybackState};
+use crate::audio::traits::{
+    PlaybackControl, PlaybackState, PlaybackStatus, TrackLoader, VolumeControl,
+};
+use crate::audio::{AudioEngine, AudioEngineBuilder};
 use crate::config::ConfigManager;
-use crate::ui::{UiSystem, MainWindowBinding};
-use crate::visualizer::{VisualizerSystem, VisualizerState};
-use crate::{Result, Error, TrackId};
+use crate::ui::UiSystem;
+use crate::visualizer::VisualizerSystem;
+use crate::{Error, Result};
 
-use super::state::{StateManager, AppState};
-use super::events::{AppEvent, EventBus, TrackInfo};
+use super::events::{AppEvent, EventBus};
 use super::lifecycle::LifecycleManager;
+use super::state::{AppState, StateManager};
 
 /// Main application controller that orchestrates all subsystems
 pub struct AppController {
     /// Audio engine for playback
     audio_engine: Arc<tokio::sync::RwLock<AudioEngine>>,
-    
+
     /// Configuration manager
     config_manager: Arc<ConfigManager>,
-    
+
     /// Event bus for inter-component communication
     event_bus: Arc<EventBus>,
-    
+
     /// Application state
     state_manager: Arc<StateManager>,
-    
+
     /// UI system
     ui_system: UiSystem,
 
@@ -56,7 +57,7 @@ impl AppController {
                 .with_buffer_size(1024)
                 .with_sample_rate(44100)
                 .build()
-                .map_err(Error::Audio)?
+                .map_err(Error::Audio)?,
         ));
         debug!("Audio engine initialized");
 
@@ -68,10 +69,8 @@ impl AppController {
         let state_manager = Arc::new(StateManager::new());
         debug!("Application state initialized");
 
-        let visualizer_system = Arc::new(
-            VisualizerSystem::new(800, 600)
-                .map_err(|e| Error::Visualizer(e))?
-        );
+        let visualizer_system =
+            Arc::new(VisualizerSystem::new(800, 600).map_err(|e| Error::Visualizer(e))?);
         debug!("Visualizer system initialized");
 
         // Initialize UI system - fix dereferencing issue
@@ -151,7 +150,7 @@ impl AppController {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(16)); // 60FPS
-            
+
             loop {
                 interval.tick().await;
 
@@ -172,7 +171,7 @@ impl AppController {
                         0.5,
                         0.3,
                     );
-                    
+
                     if let Err(e) = visualizer_system.update(dummy_spectrum) {
                         tracing::error!("Failed to update visualizer: {}", e);
                     }
@@ -184,7 +183,7 @@ impl AppController {
                 {
                     let mut state = state_manager.write();
                     let playback = &mut state.playback;
-                    
+
                     let old_playing = playback.is_playing;
                     playback.is_playing = current_state == PlaybackState::Playing;
                     playback.position = current_position.as_secs_f64();
@@ -236,7 +235,7 @@ impl AppController {
                     AppEvent::TogglePlayback => {
                         let mut engine = audio_engine.write().await;
                         let current_state = engine.state();
-                        
+
                         match current_state {
                             PlaybackState::Playing => {
                                 if let Err(e) = engine.pause().await {
@@ -253,11 +252,14 @@ impl AppController {
                                 }
                             }
                             _ => {
-                                debug!("Toggle playback ignored in current state: {:?}", current_state);
+                                debug!(
+                                    "Toggle playback ignored in current state: {:?}",
+                                    current_state
+                                );
                             }
                         }
                     }
-                    
+
                     AppEvent::PlaybackStopped => {
                         let mut engine = audio_engine.write().await;
                         if let Err(e) = engine.stop().await {
@@ -266,7 +268,7 @@ impl AppController {
                             info!("Playback stopped");
                         }
                     }
-                    
+
                     AppEvent::NextTrack => {
                         let mut engine = audio_engine.write().await;
                         if let Err(e) = engine.next_track().await {
@@ -275,7 +277,7 @@ impl AppController {
                             info!("Switched to next track");
                         }
                     }
-                    
+
                     AppEvent::PreviousTrack => {
                         let mut engine = audio_engine.write().await;
                         if let Err(e) = engine.previous_track().await {
@@ -284,13 +286,13 @@ impl AppController {
                             info!("Switched to previous track");
                         }
                     }
-                    
+
                     AppEvent::VolumeChanged(volume) => {
                         let mut engine = audio_engine.write().await;
                         engine.set_volume(volume);
                         debug!("Volume changed to: {:.2}", volume);
                     }
-                    
+
                     AppEvent::PlaybackPositionChanged(position) => {
                         let mut engine = audio_engine.write().await;
                         let duration = std::time::Duration::from_secs_f64(position * 300.0); // TODO: Use actual track duration
@@ -302,7 +304,8 @@ impl AppController {
                     }
 
                     AppEvent::VisualizerChanged(visualizer_type) => {
-                        if let Err(e) = visualizer_system.engine().set_visualizer(&visualizer_type) {
+                        if let Err(e) = visualizer_system.engine().set_visualizer(&visualizer_type)
+                        {
                             error!("Failed to change visualizer: {}", e);
                         } else {
                             state_manager.update_ui_state(|ui| {
@@ -320,12 +323,12 @@ impl AppController {
                         });
                         info!("Track changed: {:?}", track.title);
                     }
-                    
+
                     AppEvent::ApplicationExit => {
                         info!("Application exit requested");
                         break;
                     }
-                    
+
                     _ => {
                         debug!("Received unhandled event: {:?}", event);
                     }
@@ -368,26 +371,30 @@ impl AppController {
                         window.set_is_playing(is_playing);
                         window.set_is_paused(is_paused);
                         window.set_playback_state(state_text.into());
-                        
+
                         // Update volume
                         window.set_volume(current_state.playback.volume);
-                        
+
                         // Update progress
                         let progress = if current_state.playback.duration > 0.0 {
-                            (current_state.playback.position / current_state.playback.duration) as f32
+                            (current_state.playback.position / current_state.playback.duration)
+                                as f32
                         } else {
                             0.0
                         };
                         window.set_progress(progress);
-                        
+
                         // Update time displays
-                        let position_text = Self::format_duration_from_secs(current_state.playback.position);
-                        let duration_text = Self::format_duration_from_secs(current_state.playback.duration);
+                        let position_text =
+                            Self::format_duration_from_secs(current_state.playback.position);
+                        let duration_text =
+                            Self::format_duration_from_secs(current_state.playback.duration);
                         window.set_position_text(position_text.into());
                         window.set_duration_text(duration_text.into());
-                        
+
                         // Update visualizer type - fix field name
-                        window.set_visualizer_type(current_state.ui.active_visualizer.clone().into());
+                        window
+                            .set_visualizer_type(current_state.ui.active_visualizer.clone().into());
                     }
 
                     last_state = current_state;
@@ -398,10 +405,10 @@ impl AppController {
 
     /// Check if state has changed significantly
     fn state_changed(old: &AppState, new: &AppState) -> bool {
-        old.playback.is_playing != new.playback.is_playing ||
-        (old.playback.volume - new.playback.volume).abs() > 0.01 ||
-        (old.playback.position - new.playback.position).abs() > 0.5 ||
-        old.ui.active_visualizer != new.ui.active_visualizer // Fix field name
+        old.playback.is_playing != new.playback.is_playing
+            || (old.playback.volume - new.playback.volume).abs() > 0.01
+            || (old.playback.position - new.playback.position).abs() > 0.5
+            || old.ui.active_visualizer != new.ui.active_visualizer // Fix field name
     }
 
     /// Format duration from seconds
@@ -433,7 +440,7 @@ impl AppController {
     pub fn get_visualizer_frame(&self) -> Vec<u8> {
         self.visualizer_system.get_frame()
     }
-    
+
     /// Get visualizer canvas size
     pub fn get_visualizer_size(&self) -> (u32, u32) {
         self.visualizer_system.size()

@@ -1,5 +1,5 @@
 //! Canvas implementations for visualizer rendering
-//! 
+//!
 //! Provides a software-based rendering canvas that can be used
 //! by visualizer plugins to draw graphics.
 
@@ -57,7 +57,7 @@ impl SoftwareCanvas {
 
         let src_color = self.apply_blend_mode(color, x, y);
 
-        self.pixels[index] = (src_color.r * 255.0) as u8;     // R
+        self.pixels[index] = (src_color.r * 255.0) as u8; // R
         self.pixels[index + 1] = (src_color.g * 255.0) as u8; // G
         self.pixels[index + 2] = (src_color.b * 255.0) as u8; // B
         self.pixels[index + 3] = (src_color.a * 255.0) as u8; // A
@@ -66,10 +66,10 @@ impl SoftwareCanvas {
     /// Get pixel color at coordinates
     fn get_pixel(&self, x: u32, y: u32) -> Color {
         if x >= self.width || y >= self.height {
-            return Color::rgba(0.0, 0.0, 0.0, 0.0,);
+            return Color::rgba(0.0, 0.0, 0.0, 0.0);
         }
 
-        let index = ((y *self.width + x) * 4) as usize;
+        let index = ((y * self.width + x) * 4) as usize;
         if index + 3 >= self.pixels.len() {
             return Color::rgba(0.0, 0.0, 0.0, 0.0);
         }
@@ -192,7 +192,7 @@ impl Canvas for SoftwareCanvas {
                 for dx_offset in -half_width..=half_width {
                     let px = x + dx_offset;
                     let py = y + dy_offset;
-                    
+
                     if px >= 0 && px < self.width as i32 && py >= 0 && py < self.height as i32 {
                         self.set_pixel(px as u32, py as u32, color);
                     }
@@ -228,10 +228,14 @@ impl Canvas for SoftwareCanvas {
         while x <= y {
             // Draw 8 symmetric points
             let points = [
-                (cx + x, cy + y), (cx - x, cy + y),
-                (cx + x, cy - y), (cx - x, cy - y),
-                (cx + y, cy + x), (cx - y, cy + x),
-                (cx + y, cy - x), (cx - y, cy - x),
+                (cx + x, cy + y),
+                (cx - x, cy + y),
+                (cx + x, cy - y),
+                (cx - x, cy - y),
+                (cx + y, cy + x),
+                (cx - y, cy + x),
+                (cx + y, cy - x),
+                (cx - y, cy - x),
             ];
 
             for (px, py) in points {
@@ -255,11 +259,11 @@ impl Canvas for SoftwareCanvas {
         // In a real implementation, this would use a font rendering library
         let char_width = size * 0.6;
         let char_height = size;
-        
+
         for (i, _) in text.chars().enumerate() {
             let x = position.x + i as f32 * char_width;
             let y = position.y;
-            
+
             let char_rect = Rect::new(x, y, char_width * 0.8, char_height);
             self.draw_rect(char_rect, color);
         }
@@ -322,9 +326,9 @@ mod tests {
     fn test_canvas_clear() {
         let mut canvas = SoftwareCanvas::new(100, 100);
         let red = Color::rgb(1.0, 0.0, 0.0);
-        
+
         canvas.clear(red);
-        
+
         // Check a few pixels
         assert_eq!(canvas.get_pixel(0, 0), red);
         assert_eq!(canvas.get_pixel(50, 50), red);
@@ -335,14 +339,14 @@ mod tests {
     fn test_draw_rect() {
         let mut canvas = SoftwareCanvas::new(100, 100);
         let blue = Color::rgb(0.0, 0.0, 1.0);
-        
+
         canvas.clear(Color::rgb(0.0, 0.0, 0.0));
         canvas.draw_rect(Rect::new(10.0, 10.0, 20.0, 20.0), blue);
-        
+
         // Check that pixels inside the rect are blue
         assert_eq!(canvas.get_pixel(15, 15), blue);
         assert_eq!(canvas.get_pixel(25, 25), blue);
-        
+
         // Check that pixels outside the rect are black
         assert_eq!(canvas.get_pixel(5, 5), Color::rgb(0.0, 0.0, 0.0));
         assert_eq!(canvas.get_pixel(35, 35), Color::rgb(0.0, 0.0, 0.0));
@@ -353,14 +357,14 @@ mod tests {
         let mut canvas = SoftwareCanvas::new(100, 100);
         let red = Color::rgb(1.0, 0.0, 0.0);
         let green = Color::rgb(0.0, 1.0, 0.0);
-        
+
         // Set base color
         canvas.set_pixel(50, 50, red);
-        
+
         // Test additive blending
         canvas.set_blend_mode(BlendMode::Add);
         canvas.set_pixel(50, 50, green);
-        
+
         let result = canvas.get_pixel(50, 50);
         assert!(result.r > 0.0 && result.g > 0.0); // Should have both red and green
     }
@@ -369,7 +373,7 @@ mod tests {
     fn test_resize() {
         let mut canvas = SoftwareCanvas::new(100, 100);
         assert_eq!(canvas.size(), (100, 100));
-        
+
         canvas.resize(200, 150);
         assert_eq!(canvas.size(), (200, 150));
         assert_eq!(canvas.pixels.len(), 200 * 150 * 4);

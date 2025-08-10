@@ -1,21 +1,20 @@
 //! Visualizer engine for managing and rendering visualizations
-//! 
+//!
 //! The visualizer engine coordinates between audio analysis data and visualizer plugins to create real-time visual representations.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
 
 use super::canvas::SoftwareCanvas;
 use super::plugins::spectrum_bars::SpectrumBarsVisualizer;
-use super::traits::{Canvas, VisualizationConfig, Visualizer, VisualizerFactory, VisualizerRegistry};
+use super::traits::{Canvas, VisualizationConfig, Visualizer, VisualizerRegistry};
 
 /// Visualizer engine commands
 #[derive(Debug)]
@@ -144,9 +143,8 @@ impl VisualizerEngine {
             let mut registry = visualizers.write();
             registry.insert(
                 "spectrum_bars".to_string(),
-                Box::new(|| -> Box<dyn Visualizer> {
-                    Box::new(SpectrumBarsVisualizer::new())
-                }) as Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>,
+                Box::new(|| -> Box<dyn Visualizer> { Box::new(SpectrumBarsVisualizer::new()) })
+                    as Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>,
             );
         }
 
@@ -189,11 +187,12 @@ impl VisualizerEngine {
 
         // Check if visualizer exists
         let visualizers = self.visualizers.read();
-        let factory = visualizers
-            .get(visualizer_id)
-            .ok_or_else(|| VisualizerError::PluginNotFound {
-                name: visualizer_id.to_string(),
-            })?;
+        let factory =
+            visualizers
+                .get(visualizer_id)
+                .ok_or_else(|| VisualizerError::PluginNotFound {
+                    name: visualizer_id.to_string(),
+                })?;
 
         // Create new visualizer instance
         let mut new_visualizer = factory();
@@ -231,7 +230,7 @@ impl VisualizerEngine {
         Ok(())
     }
 
-   /// Resize the visualizer canvas
+    /// Resize the visualizer canvas
     pub fn resize(&self, width: u32, height: u32) -> Result<(), VisualizerError> {
         debug!("Resizing visualizer canvas to {}x{}", width, height);
 
@@ -368,7 +367,7 @@ impl VisualizerWorker {
         match command {
             VisualizerCommand::UpdateSpectrum(spectrum_data) => {
                 *self.last_spectrum.write() = Some(spectrum_data.clone());
-                
+
                 // Update active visualizer with new data
                 if let Some(ref mut visualizer) = *self.active_visualizer.write() {
                     visualizer.update(&spectrum_data)?;
@@ -376,7 +375,9 @@ impl VisualizerWorker {
             }
 
             VisualizerCommand::SetVisualizer(id) => {
-                let _ = self.event_sender.send(VisualizerEvent::VisualizerChanged { id });
+                let _ = self
+                    .event_sender
+                    .send(VisualizerEvent::VisualizerChanged { id });
             }
 
             VisualizerCommand::SetConfig(config) => {
@@ -385,7 +386,7 @@ impl VisualizerWorker {
                     let mut settings = std::collections::HashMap::new();
                     settings.insert("sensitivity".to_string(), config.sensitivity.into());
                     settings.insert("smoothing".to_string(), config.smoothing.into());
-                    
+
                     visualizer.configure(&settings)?;
                 }
 
@@ -449,7 +450,7 @@ impl VisualizerWorker {
         {
             let mut metrics = self.metrics.write();
             metrics.total_frames += 1;
-            
+
             if frame_time > metrics.peak_frame_time {
                 metrics.peak_frame_time = frame_time;
             }
@@ -461,7 +462,9 @@ impl VisualizerWorker {
         }
 
         // Send frame rendered event
-        let _ = self.event_sender.send(VisualizerEvent::FrameRendered { frame_time });
+        let _ = self
+            .event_sender
+            .send(VisualizerEvent::FrameRendered { frame_time });
 
         Ok(())
     }
@@ -469,11 +472,11 @@ impl VisualizerWorker {
     /// Update performance metrics
     fn update_metrics(&mut self) {
         let mut metrics = self.metrics.write();
-        
+
         // Calculate FPS based on recent frames
         let frames_in_last_second = 60; // Approximate based on target FPS
         metrics.fps = frames_in_last_second as f32;
-        
+
         // Calculate average frame time
         if metrics.total_frames > 0 {
             let total_time = Duration::from_millis(metrics.total_frames * 16); // Approximate
@@ -510,17 +513,17 @@ mod tests {
     #[tokio::test]
     async fn test_visualizer_state_transitions() {
         let engine = VisualizerEngine::new(800, 600).unwrap();
-        
+
         // Test start
         engine.start().unwrap();
         sleep(Duration::from_millis(10)).await;
         assert_eq!(engine.state(), VisualizerState::Running);
-        
+
         // Test pause
         engine.pause().unwrap();
         sleep(Duration::from_millis(10)).await;
         assert_eq!(engine.state(), VisualizerState::Paused);
-        
+
         // Test stop
         engine.stop().unwrap();
         sleep(Duration::from_millis(10)).await;
@@ -530,11 +533,11 @@ mod tests {
     #[tokio::test]
     async fn test_visualizer_registration() {
         let engine = VisualizerEngine::new(800, 600).unwrap();
-        
+
         // Check that spectrum_bars is available
         let available = engine.available_visualizers();
         assert!(available.contains(&"spectrum_bars".to_string()));
-        
+
         // Test setting visualizer
         engine.set_visualizer("spectrum_bars").unwrap();
     }
@@ -543,7 +546,7 @@ mod tests {
     async fn test_canvas_resize() {
         let engine = VisualizerEngine::new(800, 600).unwrap();
         assert_eq!(engine.canvas_size(), (800, 600));
-        
+
         engine.resize(1024, 768).unwrap();
         sleep(Duration::from_millis(10)).await;
         assert_eq!(engine.canvas_size(), (1024, 768));
@@ -554,17 +557,13 @@ mod tests {
         let engine = VisualizerEngine::new(800, 600).unwrap();
         engine.set_visualizer("spectrum_bars").unwrap();
         engine.start().unwrap();
-        
+
         // Create test spectrum data
-        let spectrum_data = SpectrumData::new(
-            vec![0.1, 0.2, 0.3, 0.4, 0.5],
-            0.5,
-            0.3,
-        );
-        
+        let spectrum_data = SpectrumData::new(vec![0.1, 0.2, 0.3, 0.4, 0.5], 0.5, 0.3);
+
         engine.update_spectrum(spectrum_data).unwrap();
         sleep(Duration::from_millis(50)).await;
-        
+
         // Should not panic and should update internal state
     }
 
@@ -572,14 +571,14 @@ mod tests {
     async fn test_configuration_update() {
         let engine = VisualizerEngine::new(800, 600).unwrap();
         engine.set_visualizer("spectrum_bars").unwrap();
-        
+
         let mut config = VisualizationConfig::default();
         config.sensitivity = 1.5;
         config.smoothing = false;
-        
+
         engine.set_config(config).unwrap();
         sleep(Duration::from_millis(10)).await;
-        
+
         // Configuration should be updated internally
     }
 
@@ -587,9 +586,9 @@ mod tests {
     async fn test_event_subscription() {
         let engine = VisualizerEngine::new(800, 600).unwrap();
         let mut event_receiver = engine.subscribe_events();
-        
+
         engine.set_visualizer("spectrum_bars").unwrap();
-        
+
         // Should receive visualizer changed event
         tokio::select! {
             event = event_receiver.recv() => {
@@ -611,13 +610,13 @@ mod tests {
         let engine = VisualizerEngine::new(100, 100).unwrap();
         engine.set_visualizer("spectrum_bars").unwrap();
         engine.start().unwrap();
-        
+
         // Let it render a few frames
         sleep(Duration::from_millis(100)).await;
-        
+
         let frame = engine.get_frame();
         assert_eq!(frame.len(), 100 * 100 * 4); // RGBA
-        
+
         let metrics = engine.metrics();
         assert!(metrics.total_frames > 0);
     }

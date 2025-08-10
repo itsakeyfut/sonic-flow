@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 
 use crate::{PlaylistId, TrackId};
 

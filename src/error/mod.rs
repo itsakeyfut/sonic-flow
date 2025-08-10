@@ -1,12 +1,12 @@
 //! Error handling for the Sonic Flow.
-//! 
+//!
 //! This module provides a hierarchical error system that allows for
 //! proper error propagation and recovery strategies.
 
 use thiserror::Error;
 
 /// The main error type for the Sonic Flow application.
-/// 
+///
 /// This error type aggregates all possible errors that can occur
 /// within the application, providing a unified interface for error handling.
 #[derive(Error, Debug)]

@@ -2,7 +2,7 @@
 
 use crate::{Error, Result};
 use tokio::signal;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// Application lifecycle manager
 pub struct LifecycleManager {

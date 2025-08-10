@@ -3,8 +3,8 @@
 //! This module contains the main application controller that orchestrates
 //! the interaction between different components of the Sonic Flow.
 
-use crate::{Error, Result};
-use tracing::{debug, error, info};
+use crate::Result;
+use tracing::{debug, info};
 
 pub mod controller;
 pub mod events;
@@ -65,8 +65,6 @@ impl SonicFlow {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     async fn test_sonic_flow_creation() {
         // For now, we'll skip actual initialization in tests

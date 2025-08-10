@@ -285,7 +285,6 @@ pub fn is_supported_extension(extension: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_supported_extensions() {
