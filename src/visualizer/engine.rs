@@ -96,3 +96,27 @@ pub struct VisualizerEngine {
     /// Last spectrum data
     last_spectrum: Arc<RwLock<Option<SpectrumData>>>,
 }
+
+/// Internal visualizer worker
+struct VisualizerWorker {
+    /// State reference
+    state: Arc<RwLock<VisualizerState>>,
+    /// Active visualizer reference
+    active_visualizer: Arc<RwLock<Option<Box<dyn Visualizer>>>>,
+    /// Configuration reference
+    config: Arc<RwLock<VisualizationConfig>>,
+    /// Canvas reference
+    canvas: Arc<RwLock<SoftwareCanvas>>,
+    /// Command receiver
+    command_receiver: mpsc::UnboundedReceiver<VisualizerCommand>,
+    /// Event sender
+    event_sender: broadcast::Sender<VisualizerEvent>,
+    /// Metrics reference
+    metrics: Arc<RwLock<VisualizerMetrics>>,
+    /// Spectrum data reference
+    last_spectrum: Arc<RwLock<Option<SpectrumData>>>,
+    /// Frame timing
+    last_frame_time: Instant,
+    /// Target frame duration
+    target_frame_duration: Duration,
+}
