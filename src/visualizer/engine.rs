@@ -222,4 +222,11 @@ impl VisualizerEngine {
 
         Ok(())
     }
+
+    /// Update with new spectrum data
+    pub fn update_spectrum(&self, spectrum_data: SpectrumData) -> Result<(), VisualizerError> {
+        *self.last_spectrum.write() = Some(spectrum_data.clone());
+        self.send_command(VisualizerCommand::UpdateSpectrum(spectrum_data))?;
+        Ok(())
+    }
 }
