@@ -42,3 +42,20 @@ pub trait Visualizer: Send + Sync {
         60
     }
 }
+
+/// Visualizer metadata information
+#[derive(Debug, Clone)]
+pub struct VisualizerMetadata {
+    /// Unique identifier for the visualizer
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Version string
+    pub version: String,
+    /// Author information
+    pub author: String,
+    /// Description
+    pub description: String,
+    /// Configuration schema
+    pub config_schema: Vec<ConfigParameter>,
+}
