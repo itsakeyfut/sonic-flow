@@ -83,3 +83,35 @@ pub fn validate_visualizer(visualizer: &dyn crate::visualizer::traits::Visualize
     
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::visualizer::traits::*;
+    
+    #[test]
+    fn test_builtin_visualizers_creation() {
+        let visualizers = create_builtin_visualizers();
+        
+        // Should have at least spectrum_bars
+        assert!(visualizers.contains_key("spectrum_bars"));
+        
+        // Test creating spectrum bars visualizer
+        let factory = visualizers.get("spectrum_bars").unwrap();
+        let visualizer = factory();
+        
+        let metadata = visualizer.metadata();
+        assert_eq!(metadata.id, "spectrum_bars");
+        assert!(!metadata.name.is_empty());
+    }
+    
+    #[test]
+    fn test_visualizer_validation() {
+        let visualizers = create_builtin_visualizers();
+        let factory = visualizers.get("spectrum_bars").unwrap();
+        let visualizer = factory();
+        
+        // Should pass validation
+        assert!(validate_visualizer(visualizer.as_ref()).is_ok());
+    }
+}
