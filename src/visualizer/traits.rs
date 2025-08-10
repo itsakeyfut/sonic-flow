@@ -18,7 +18,7 @@ pub trait Visualizer: Send + Sync {
     fn metadata(&self) -> VisualizerMetadata;
 
     /// Initialize the visualizer with configuration
-    fn initialize(&mut self, config: &VisualizerConfig) -> Result<(), VisualizerError>;
+    fn initialize(&mut self, config: &VisualizationConfig) -> Result<(), VisualizerError>;
 
     /// Update the visualizer with new spectrum data
     fn update(&mut self, spectrum_data: &SpectrumData) -> Result<(), VisualizerError>;
@@ -37,7 +37,7 @@ pub trait Visualizer: Send + Sync {
         true
     }
 
-    /// Get the preferred update rate(FPS)
+    /// Get the preferred update rate (FPS)
     fn preferred_update_rate(&self) -> u32 {
         60
     }
