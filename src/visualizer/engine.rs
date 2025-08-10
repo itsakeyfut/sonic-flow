@@ -212,4 +212,14 @@ impl VisualizerEngine {
         info!("Visualizer changed to: {}", visualizer_id);
         Ok(())
     }
+
+    /// Update configuration
+    pub fn set_config(&self, config: VisualizationConfig) -> Result<(), VisualizerError> {
+        debug!("Updating visualizer configuration");
+
+        *self.config.write() = config.clone();
+        self.send_command(VisualizerCommand::SetConfig(config))?;
+
+        Ok(())
+    }
 }
