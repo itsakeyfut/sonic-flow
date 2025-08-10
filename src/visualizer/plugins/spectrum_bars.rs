@@ -76,3 +76,21 @@ struct BarState {
     /// Smoothed height for animation
     smoothed_height: f32,
 }
+
+/// Spectrum bars visualizer
+pub struct SpectrumBarsVisualizer {
+    /// Visualizer configuration
+    config: SpectrumBarsConfig,
+    /// Visualization settings
+    vis_config: VisualizationConfig,
+    /// Bar states
+    bars: Vec<BarState>,
+    /// Last update time
+    last_update: Instant,
+    /// Frequency bin mapping for logarithmic scaling
+    frequency_bins: Vec<usize>,
+    /// Maximum amplitude for normalization
+    max_amplitude: f32,
+    /// Smoothing factor for animations
+    smoothing_factor: f32,
+}
