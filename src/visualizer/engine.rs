@@ -283,4 +283,9 @@ impl VisualizerEngine {
     pub fn canvas_size(&self) -> (u32, u32) {
         self.canvas.read().size()
     }
+
+    /// Subscribe to visualizer events
+    pub fn subscribe_events(&self) -> broadcast::Receiver<VisualizerEvent> {
+        self.event_sender.subscribe()
+    }
 }
