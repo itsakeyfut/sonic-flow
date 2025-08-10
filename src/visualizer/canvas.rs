@@ -18,3 +18,16 @@ pub struct SoftwareCanvas {
     /// Current blend mode
     blend_mode: BlendMode,
 }
+
+impl SoftwareCanvas {
+    /// Create a new software canvas
+    pub fn new(width: u32, height: u32) -> Self {
+        let pixel_count = (width * height * 4) as usize;
+        Self {
+            width,
+            height,
+            pixels: vec![0; pixel_count],
+            blend_mode: BlendMode::Normal,
+        }
+    }
+}
