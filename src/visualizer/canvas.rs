@@ -30,4 +30,12 @@ impl SoftwareCanvas {
             blend_mode: BlendMode::Normal,
         }
     }
+
+    /// Resize the canvas
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        let pixel_count = (width * height * 4) as usize;
+        self.pixels.resize(pixel_count, 0);
+    }
 }
