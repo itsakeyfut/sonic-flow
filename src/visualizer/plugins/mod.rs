@@ -10,7 +10,7 @@ pub use spectrum_bars::SpectrumBarsVisualizer;
 /// Re-export commonly used types for plugin development
 pub use crate::visualizer::traits::{
     BlendMode, Canvas, Color, ColorScheme, ConfigParameter, ParameterType, PluginValue, Point,
-    Rect, VisualizationConfig, Visualizer, VisualizerMetadata,
+    Rect, VisualizationConfig, Visualizer, VisualizerMetadata, VisualizerRegistry,
 };
 
 /// Plugin registration macro
@@ -41,8 +41,8 @@ macro_rules! register_visualizer {
 }
 
 /// Utility function to create all built-in visualizers
-pub fn create_builtin_visualizers() -> std::collections::HashMap<String, Box<dyn Fn() -> Box<dyn crate::visualizer::traits::Visualizer> + Send + Sync>> {
-    let mut visualizers = std::collections::HashMap::new();
+pub fn create_builtin_visualizers() -> VisualizerRegistry {
+    let mut visualizers = VisualizerRegistry::new();
     
     // Spectrum bars visualizer
     visualizers.insert(

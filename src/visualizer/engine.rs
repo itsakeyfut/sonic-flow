@@ -15,7 +15,7 @@ use crate::error::VisualizerError;
 
 use super::canvas::SoftwareCanvas;
 use super::plugins::spectrum_bars::SpectrumBarsVisualizer;
-use super::traits::{Canvas, VisualizationConfig, Visualizer};
+use super::traits::{Canvas, VisualizationConfig, Visualizer, VisualizerFactory, VisualizerRegistry};
 
 /// Visualizer engine commands
 #[derive(Debug)]
@@ -82,7 +82,7 @@ pub struct VisualizerEngine {
     /// Active visualizer
     active_visualizer: Arc<RwLock<Option<Box<dyn Visualizer>>>>,
     /// Available visualizers registry
-    visualizers: Arc<RwLock<HashMap<String, Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>>>>,
+    visualizers: Arc<RwLock<VisualizerRegistry>>,
     /// Current configuration
     config: Arc<RwLock<VisualizationConfig>>,
     /// Rendering canvas
@@ -139,7 +139,7 @@ impl VisualizerEngine {
         let last_spectrum = Arc::new(RwLock::new(None));
 
         // Create visualizer registry with built-in visualizers
-        let visualizers = Arc::new(RwLock::new(HashMap::new()));
+        let visualizers = Arc::new(RwLock::new(VisualizerRegistry::new()));
         {
             let mut registry = visualizers.write();
             registry.insert(
