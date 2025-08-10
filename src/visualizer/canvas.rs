@@ -115,4 +115,18 @@ impl SoftwareCanvas {
             }
         }
     }
+
+    /// Draw a horizontal line (optimized)
+    fn draw_horizontal_line(&mut self, x1: i32, x2: i32, y: i32, color: Color) {
+        if y < 0 || y >= self.height as i32 {
+            return;
+        }
+
+        let start_x = x1.min(x2).max(0) as u32;
+        let end_x = x1.max(x2).min(self.width as i32 - 1) as u32;
+
+        for x in start_x..=end_x {
+            self.set_pixel(x, y as u32, color);
+        }
+    }
 }
