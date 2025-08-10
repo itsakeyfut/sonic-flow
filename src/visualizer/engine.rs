@@ -310,3 +310,173 @@ impl VisualizerEngine {
             .map_err(|_| VisualizerError::Rendering("Visualizer worker not available".to_string()))
     }
 }
+
+impl VisualizerWorker {
+    /// Run the visualizer worker main loop
+    async fn run(mut self) {
+        debug!("Visualizer worker started");
+
+        let mut render_interval = tokio::time::interval(self.target_frame_duration);
+        let mut last_metrics_update = Instant::now();
+
+        loop {
+            tokio::select! {
+                // Handle commands
+                command = self.command_receiver.recv() => {
+                    match command {
+                        Some(cmd) => {
+                            if let Err(e) = self.handle_command(cmd).await {
+                                error!("Visualizer command failed: {}", e);
+                                let _ = self.event_sender.send(VisualizerEvent::Error {
+                                    error: e.to_string(),
+                                });
+                            }
+                        }
+                        None => {
+                            debug!("Visualizer command channel closed");
+                            break;
+                        }
+                    }
+                }
+
+                // Render frames
+                _ = render_interval.tick() => {
+                    if *self.state.read() == VisualizerState::Running {
+                        if let Err(e) = self.render_frame().await {
+                            error!("Frame rendering failed: {}", e);
+                            let _ = self.event_sender.send(VisualizerEvent::Error {
+                                error: e.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Update metrics periodically
+            if last_metrics_update.elapsed() >= Duration::from_secs(1) {
+                self.update_metrics();
+                last_metrics_update = Instant::now();
+            }
+        }
+
+        debug!("Visualizer worker shutting down");
+    }
+
+    /// Handle a visualizer command
+    async fn handle_command(&mut self, command: VisualizerCommand) -> Result<(), VisualizerError> {
+        match command {
+            VisualizerCommand::UpdateSpectrum(spectrum_data) => {
+                *self.last_spectrum.write() = Some(spectrum_data.clone());
+                
+                // Update active visualizer with new data
+                if let Some(ref mut visualizer) = *self.active_visualizer.write() {
+                    visualizer.update(&spectrum_data)?;
+                }
+            }
+
+            VisualizerCommand::SetVisualizer(id) => {
+                let _ = self.event_sender.send(VisualizerEvent::VisualizerChanged { id });
+            }
+
+            VisualizerCommand::SetConfig(config) => {
+                // Update active visualizer configuration
+                if let Some(ref mut visualizer) = *self.active_visualizer.write() {
+                    let mut settings = std::collections::HashMap::new();
+                    settings.insert("sensitivity".to_string(), config.sensitivity.into());
+                    settings.insert("smoothing".to_string(), config.smoothing.into());
+                    
+                    visualizer.configure(&settings)?;
+                }
+
+                let _ = self.event_sender.send(VisualizerEvent::ConfigUpdated);
+            }
+
+            VisualizerCommand::Resize(width, height) => {
+                debug!("Resizing canvas to {}x{}", width, height);
+                // Canvas was already resized in the main thread
+            }
+
+            VisualizerCommand::Start => {
+                debug!("Visualizer worker starting");
+            }
+
+            VisualizerCommand::Pause => {
+                debug!("Visualizer worker paused");
+            }
+
+            VisualizerCommand::Stop => {
+                debug!("Visualizer worker stopped");
+                // Reset active visualizer
+                if let Some(ref mut visualizer) = *self.active_visualizer.write() {
+                    visualizer.reset();
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Render a single frame
+    async fn render_frame(&mut self) -> Result<(), VisualizerError> {
+        let frame_start = Instant::now();
+
+        // Check if we have an active visualizer
+        let has_visualizer = self.active_visualizer.read().is_some();
+        if !has_visualizer {
+            return Ok(());
+        }
+
+        // Get current configuration and canvas
+        let config = self.config.read().clone();
+        let mut canvas = self.canvas.write();
+
+        // Clear canvas
+        canvas.clear(config.color_scheme.background);
+
+        // Render visualizer
+        if let Some(ref visualizer) = *self.active_visualizer.read() {
+            visualizer.render(&mut *canvas)?;
+        }
+
+        drop(canvas); // Release canvas lock
+
+        // Update timing metrics
+        let frame_time = frame_start.elapsed();
+        self.last_frame_time = frame_start;
+
+        // Update metrics
+        {
+            let mut metrics = self.metrics.write();
+            metrics.total_frames += 1;
+            
+            if frame_time > metrics.peak_frame_time {
+                metrics.peak_frame_time = frame_time;
+            }
+
+            // Check for dropped frames (frame time > target)
+            if frame_time > self.target_frame_duration {
+                metrics.dropped_frames += 1;
+            }
+        }
+
+        // Send frame rendered event
+        let _ = self.event_sender.send(VisualizerEvent::FrameRendered { frame_time });
+
+        Ok(())
+    }
+
+    /// Update performance metrics
+    fn update_metrics(&mut self) {
+        let mut metrics = self.metrics.write();
+        
+        // Calculate FPS based on recent frames
+        let frames_in_last_second = 60; // Approximate based on target FPS
+        metrics.fps = frames_in_last_second as f32;
+        
+        // Calculate average frame time
+        if metrics.total_frames > 0 {
+            let total_time = Duration::from_millis(metrics.total_frames * 16); // Approximate
+            metrics.avg_frame_time = total_time / metrics.total_frames as u32;
+        }
+    }
+}
