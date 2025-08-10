@@ -210,4 +210,13 @@ impl Color {
     pub fn gray(value: f32) -> Self {
         Self::rgb(value, value, value)
     }
+
+    /// Convert to 32-bit RGBA value
+    pub fn to_rgba32(&self) -> u32 {
+        let r = (self.r.clamp(0.0, 1.0) * 255.0) as u32;
+        let g = (self.g.clamp(0.0, 1.0) * 255.0) as u32;
+        let b = (self.b.clamp(0.0, 1.0) * 255.0) as u32;
+        let a = (self.a.clamp(0.0, 1.0) * 255.0) as u32;
+        (a << 24) | (r << 16) | (g << 8) | b
+    }
 }
