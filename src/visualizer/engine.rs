@@ -239,4 +239,28 @@ impl VisualizerEngine {
 
         Ok(())
     }
+
+    /// Start the visualizer
+    pub fn start(&self) -> Result<(), VisualizerError> {
+        info!("Starting visualizer engine");
+        *self.state.write() = VisualizerState::Running;
+        self.send_command(VisualizerCommand::Start)?;
+        Ok(())
+    }
+
+    /// Pause the visualizer
+    pub fn pause(&self) -> Result<(), VisualizerError> {
+        info!("Pausing visualizer engine");
+        *self.state.write() = VisualizerState::Paused;
+        self.send_command(VisualizerCommand::Pause)?;
+        Ok(())
+    }
+
+    /// Stop the visualizer
+    pub fn stop(&self) -> Result<(), VisualizerError> {
+        info!("Stopping visualizer engine");
+        *self.state.write() = VisualizerState::Stopped;
+        self.send_command(VisualizerCommand::Stop)?;
+        Ok(())
+    }
 }
