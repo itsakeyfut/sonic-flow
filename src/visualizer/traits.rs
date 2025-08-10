@@ -192,3 +192,12 @@ pub enum BlendMode {
     Multiply,
     Screen,
 }
+
+// Implementations
+
+impl Color {
+    /// Create a new RGBA color
+    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self { r, g, b, a }
+    }
+}
