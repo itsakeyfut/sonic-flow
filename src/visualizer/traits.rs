@@ -219,4 +219,26 @@ impl Color {
         let a = (self.a.clamp(0.0, 1.0) * 255.0) as u32;
         (a << 24) | (r << 16) | (g << 8) | b
     }
+
+    /// Create color from HSV values
+    pub fn from_hsv(h: f32, s: f32, v: f32) -> Self {
+        let h = h.rem_euclid(360.0);
+        let s = s.clamp(0.0, 1.0);
+        let v = v.clamp(0.0, 1.0);
+
+        let c = v * s;
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+        let m = v - c;
+
+        let (r, g, b) = match h as i32 / 60 {
+            0 => (c, x, 0.0),
+            1 => (x, c, 0.0),
+            2 => (0.0, c, x),
+            3 => (0.0, x, c),
+            4 => (x, 0.0, c),
+            _ => (c, 0.0, x),
+        };
+
+        Self::rgb(r + m, g + m, b + m)
+    }
 }
