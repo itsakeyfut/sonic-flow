@@ -74,3 +74,25 @@ pub enum VisualizerState {
     /// Paused (maintaining state but not rendering)
     Paused,
 }
+
+/// Main visualizer engine
+pub struct VisualizerEngine {
+    /// Current state
+    state: Arc<RwLock<VisualizerState>>,
+    /// Active visualizer
+    active_visualizer: Arc<RwLock<Option<Box<dyn Visualizer>>>>,
+    /// Available visualizers registry
+    visualizers: Arc<RwLock<HashMap<String, Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>>>>,
+    /// Current configuration
+    config: Arc<RwLock<VisualizationConfig>>,
+    /// Rendering canvas
+    canvas: Arc<RwLock<SoftwareCanvas>>,
+    /// Command sender
+    command_sender: mpsc::UnboundedSender<VisualizerCommand>,
+    /// Event broadcaster
+    event_sender: broadcast::Sender<VisualizerEvent>,
+    /// Performance metrics
+    metrics: Arc<RwLock<VisualizerMetrics>>,
+    /// Last spectrum data
+    last_spectrum: Arc<RwLock<Option<SpectrumData>>>,
+}
