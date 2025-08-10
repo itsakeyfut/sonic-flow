@@ -140,3 +140,30 @@ pub enum PluginValue {
     String(String),
     Color(Color),
 }
+
+/// Canvas trait for rendering
+pub trait Canvas {
+    /// Get canvas dimensions
+    fn size(&self) -> (u32, u32);
+
+    /// Clear the canvas with a color
+    fn clear(&mut self, color: Color);
+
+    /// Draw a rectangle
+    fn draw_rect(&mut self, rect: Rect, color: Color);
+
+    /// Draw a line
+    fn draw_line(&mut self, start: Point, end: Point, color: Color, width: f32);
+
+    /// Draw a Circle
+    fn draw_circle(&mut self, center: Point, radius: f32, color: Color);
+
+    /// Draw text
+    fn draw_text(&mut self, text: &str, position: Point, color: Color, size: f32);
+
+    /// Draw a polygon
+    fn draw_polygon(&mut self, points: &[Point], color: Color);
+
+    /// Set blend mode
+    fn set_blend_mode(&mut self, mode: BlendMode);
+}
