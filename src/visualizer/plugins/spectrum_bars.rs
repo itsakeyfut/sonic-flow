@@ -63,3 +63,16 @@ pub enum GradientDirection {
     /// No gradient (solid color)
     None,
 }
+
+/// Individual bar state
+#[derive(Debug, Clone)]
+struct BarState {
+    /// Current height (0.0 - 1.0)
+    height: f32,
+    /// Peak height (0.0 - 1.0)
+    peak_height: f32,
+    /// Peak hold start time
+    peak_hold_start: Instant,
+    /// Smoothed height for animation
+    smoothed_height: f32,
+}
