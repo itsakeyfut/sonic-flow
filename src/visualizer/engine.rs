@@ -492,3 +492,132 @@ impl Default for VisualizerMetrics {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    async fn test_visualizer_engine_creation() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        assert_eq!(engine.state(), VisualizerState::Stopped);
+        assert_eq!(engine.canvas_size(), (800, 600));
+    }
+
+    #[tokio::test]
+    async fn test_visualizer_state_transitions() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        
+        // Test start
+        engine.start().unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(engine.state(), VisualizerState::Running);
+        
+        // Test pause
+        engine.pause().unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(engine.state(), VisualizerState::Paused);
+        
+        // Test stop
+        engine.stop().unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(engine.state(), VisualizerState::Stopped);
+    }
+
+    #[tokio::test]
+    async fn test_visualizer_registration() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        
+        // Check that spectrum_bars is available
+        let available = engine.available_visualizers();
+        assert!(available.contains(&"spectrum_bars".to_string()));
+        
+        // Test setting visualizer
+        engine.set_visualizer("spectrum_bars").unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_canvas_resize() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        assert_eq!(engine.canvas_size(), (800, 600));
+        
+        engine.resize(1024, 768).unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(engine.canvas_size(), (1024, 768));
+    }
+
+    #[tokio::test]
+    async fn test_spectrum_update() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        engine.set_visualizer("spectrum_bars").unwrap();
+        engine.start().unwrap();
+        
+        // Create test spectrum data
+        let spectrum_data = SpectrumData::new(
+            vec![0.1, 0.2, 0.3, 0.4, 0.5],
+            0.5,
+            0.3,
+        );
+        
+        engine.update_spectrum(spectrum_data).unwrap();
+        sleep(Duration::from_millis(50)).await;
+        
+        // Should not panic and should update internal state
+    }
+
+    #[tokio::test]
+    async fn test_configuration_update() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        engine.set_visualizer("spectrum_bars").unwrap();
+        
+        let mut config = VisualizationConfig::default();
+        config.sensitivity = 1.5;
+        config.smoothing = false;
+        
+        engine.set_config(config).unwrap();
+        sleep(Duration::from_millis(10)).await;
+        
+        // Configuration should be updated internally
+    }
+
+    #[tokio::test]
+    async fn test_event_subscription() {
+        let engine = VisualizerEngine::new(800, 600).unwrap();
+        let mut event_receiver = engine.subscribe_events();
+        
+        engine.set_visualizer("spectrum_bars").unwrap();
+        
+        // Should receive visualizer changed event
+        tokio::select! {
+            event = event_receiver.recv() => {
+                match event.unwrap() {
+                    VisualizerEvent::VisualizerChanged { id } => {
+                        assert_eq!(id, "spectrum_bars");
+                    }
+                    _ => panic!("Unexpected event"),
+                }
+            }
+            _ = sleep(Duration::from_millis(100)) => {
+                panic!("Timeout waiting for event");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_frame_rendering() {
+        let engine = VisualizerEngine::new(100, 100).unwrap();
+        engine.set_visualizer("spectrum_bars").unwrap();
+        engine.start().unwrap();
+        
+        // Let it render a few frames
+        sleep(Duration::from_millis(100)).await;
+        
+        let frame = engine.get_frame();
+        assert_eq!(frame.len(), 100 * 100 * 4); // RGBA
+        
+        let metrics = engine.metrics();
+        assert!(metrics.total_frames > 0);
+    }
+}
