@@ -8,6 +8,7 @@ use crate::audio::{AudioEngine, AudioEngineBuilder, AudioEngineStatus};
 use crate::audio::traits::{PlaybackControl, VolumeControl, TrackLoader, PlaybackStatus, PlaybackState};
 use crate::config::ConfigManager;
 use crate::ui::{UiSystem, MainWindowBinding};
+use crate::visualizer::{VisualizerSystem, VisualizerState};
 use crate::{Result, Error, TrackId};
 
 use super::state::{StateManager, AppState};
@@ -30,6 +31,9 @@ pub struct AppController {
     
     /// UI system
     ui_system: UiSystem,
+
+    /// Visualizer system
+    visualizer_system: Arc<VisualizerSystem>,
 }
 
 impl AppController {
@@ -63,7 +67,13 @@ impl AppController {
         // Initialize application state
         let state_manager = Arc::new(StateManager::new());
         debug!("Application state initialized");
-        
+
+        let visualizer_system = Arc::new(
+            VisualizerSystem::new(800, 600)
+                .map_err(|e| Error::Visualizer(e))?
+        );
+        debug!("Visualizer system initialized");
+
         // Initialize UI system - fix dereferencing issue
         let ui_system = UiSystem::new(EventBus::clone(&event_bus))?;
         debug!("UI system initialized");
@@ -74,6 +84,7 @@ impl AppController {
             event_bus,
             state_manager,
             ui_system,
+            visualizer_system,
         })
     }
 
@@ -136,9 +147,10 @@ impl AppController {
         let audio_engine = Arc::clone(&self.audio_engine);
         let state_manager = Arc::clone(&self.state_manager);
         let event_bus = Arc::clone(&self.event_bus);
+        let visualizer_system = Arc::clone(&self.visualizer_system);
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(16)); // 60FPS
             
             loop {
                 interval.tick().await;
@@ -150,6 +162,22 @@ impl AppController {
                 let current_volume = audio_engine.volume();
                 let is_muted = audio_engine.is_muted();
                 let current_track = audio_engine.current_track();
+
+                // TODO: 音声エンジンからスペクトラムデータを取得
+                // 実際の実装では AudioEngine にスペクトラムデータ取得メソッドを追加する必要があります
+                if current_state == PlaybackState::Playing {
+                    // ダミーのスペクトラムデータ（実装時は実際のFFTデータを使用）
+                    let dummy_spectrum = crate::audio::analysis::SpectrumData::new(
+                        (0..64).map(|i| (i as f32 / 64.0) * 0.5).collect(),
+                        0.5,
+                        0.3,
+                    );
+                    
+                    if let Err(e) = visualizer_system.update(dummy_spectrum) {
+                        tracing::error!("Failed to update visualizer: {}", e);
+                    }
+                }
+
                 drop(audio_engine);
 
                 // Update app state
@@ -167,10 +195,18 @@ impl AppController {
                     // Publish events for state changes
                     if old_playing != playback.is_playing {
                         if playback.is_playing {
+                            if let Err(e) = visualizer_system.start() {
+                                tracing::error!("Failed to start visualizer: {}", e);
+                            }
+
                             if let Some(track_id) = current_track {
                                 let _ = event_bus.publish(AppEvent::PlaybackStarted(track_id));
                             }
                         } else {
+                            if let Err(e) = visualizer_system.stop() {
+                                tracing::error!("Failed to stop visualizer: {}", e);
+                            }
+
                             let _ = event_bus.publish(AppEvent::PlaybackPaused);
                         }
                     }
@@ -190,6 +226,7 @@ impl AppController {
         let event_bus = Arc::clone(&self.event_bus);
         let audio_engine = Arc::clone(&self.audio_engine);
         let state_manager = Arc::clone(&self.state_manager);
+        let visualizer_system = Arc::clone(&self.visualizer_system);
 
         tokio::spawn(async move {
             let mut event_receiver = event_bus.subscribe();
@@ -263,15 +300,18 @@ impl AppController {
                             debug!("Seek to position: {:.2}s", position);
                         }
                     }
-                    
+
                     AppEvent::VisualizerChanged(visualizer_type) => {
-                        state_manager.update_ui_state(|ui| {
-                            // Fix field name - use active_visualizer instead of visualizer_type
-                            ui.active_visualizer = visualizer_type.clone();
-                        });
-                        info!("Visualizer changed to: {}", visualizer_type);
+                        if let Err(e) = visualizer_system.engine().set_visualizer(&visualizer_type) {
+                            error!("Failed to change visualizer: {}", e);
+                        } else {
+                            state_manager.update_ui_state(|ui| {
+                                ui.active_visualizer = visualizer_type.clone();
+                            });
+                            info!("Visualizer changed to: {}", visualizer_type);
+                        }
                     }
-                    
+
                     AppEvent::TrackChanged(track) => {
                         state_manager.update_player_state(|player| {
                             player.current_track = Some(track.id);
@@ -382,6 +422,21 @@ impl AppController {
 
         debug!("Application controller shutdown completed");
         Ok(())
+    }
+
+    /// Get visualizer system reference
+    pub fn visualizer_system(&self) -> &VisualizerSystem {
+        &self.visualizer_system
+    }
+
+    /// Get current visualizer frame
+    pub fn get_visualizer_frame(&self) -> Vec<u8> {
+        self.visualizer_system.get_frame()
+    }
+    
+    /// Get visualizer canvas size
+    pub fn get_visualizer_size(&self) -> (u32, u32) {
+        self.visualizer_system.size()
     }
 }
 
