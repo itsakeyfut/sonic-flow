@@ -35,3 +35,16 @@ pub enum VisualizerCommand {
     /// Stop and cleanup
     Stop,
 }
+
+/// Visualizer engine events
+#[derive(Debug, Clone)]
+pub enum VisualizerEvent {
+    /// Frame rendered successfully
+    FrameRendered { frame_time: Duration },
+    /// Visualizer changed
+    VisualizerChanged { id: String },
+    /// Configuration updated
+    ConfigUpdated,
+    /// Error occurred
+    Error { error: String },
+}
