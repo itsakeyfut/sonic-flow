@@ -176,3 +176,11 @@ pub struct Rect {
     pub width: f32,
     pub height: f32,
 }
+
+/// Point definition
+#[derive(Debug, Clone, Copy)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+
+}
