@@ -67,3 +67,38 @@ impl VisualizerSystem {
         self.engine.canvas_size()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::analysis::SpectrumData;
+    
+    #[tokio::test]
+    async fn test_visualizer_system_creation() {
+        let system = VisualizerSystem::new(800, 600).unwrap();
+        assert_eq!(system.size(), (800, 600));
+    }
+    
+    #[tokio::test]
+    async fn test_visualizer_system_workflow() {
+        let system = VisualizerSystem::new(400, 300).unwrap();
+        
+        // Start visualization
+        system.start().unwrap();
+        
+        // Update with test data
+        let spectrum_data = SpectrumData::new(
+            vec![0.1, 0.2, 0.3, 0.4, 0.5],
+            0.5,
+            0.3,
+        );
+        system.update(spectrum_data).unwrap();
+        
+        // Get frame
+        let frame = system.get_frame();
+        assert_eq!(frame.len(), 400 * 300 * 4); // RGBA
+        
+        // Stop visualization
+        system.stop().unwrap();
+    }
+}
