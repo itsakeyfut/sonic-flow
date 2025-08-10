@@ -144,3 +144,165 @@ impl SoftwareCanvas {
         }
     }
 }
+
+impl Canvas for SoftwareCanvas {
+    fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn clear(&mut self, color: Color) {
+        let r = (color.r * 255.0) as u8;
+        let g = (color.g * 255.0) as u8;
+        let b = (color.b * 255.0) as u8;
+        let a = (color.a * 255.0) as u8;
+
+        for chunk in self.pixels.chunks_exact_mut(4) {
+            chunk[0] = r;
+            chunk[1] = g;
+            chunk[2] = b;
+            chunk[3] = a;
+        }
+    }
+
+    fn draw_rect(&mut self, rect: Rect, color: Color) {
+        self.fill_rect_region(rect, color);
+    }
+
+    fn draw_line(&mut self, start: Point, end: Point, color: Color, width: f32) {
+        // Bresenham's line algorithm with width support
+        let x0 = start.x as i32;
+        let y0 = start.y as i32;
+        let x1 = end.x as i32;
+        let y1 = end.y as i32;
+
+        let dx = (x1 - x0).abs();
+        let dy = (y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx - dy;
+
+        let mut x = x0;
+        let mut y = y0;
+
+        let half_width = (width / 2.0) as i32;
+
+        loop {
+            // Draw thick line by drawing multiple pixels around the center point
+            for dy_offset in -half_width..=half_width {
+                for dx_offset in -half_width..=half_width {
+                    let px = x + dx_offset;
+                    let py = y + dy_offset;
+                    
+                    if px >= 0 && px < self.width as i32 && py >= 0 && py < self.height as i32 {
+                        self.set_pixel(px as u32, py as u32, color);
+                    }
+                }
+            }
+
+            if x == x1 && y == y1 {
+                break;
+            }
+
+            let e2 = 2 * err;
+            if e2 > -dy {
+                err -= dy;
+                x += sx;
+            }
+            if e2 < dx {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
+    fn draw_circle(&mut self, center: Point, radius: f32, color: Color) {
+        let cx = center.x as i32;
+        let cy = center.y as i32;
+        let r = radius as i32;
+
+        // Midpoint circle algorithm
+        let mut x = 0;
+        let mut y = r;
+        let mut d = 1 - r;
+
+        while x <= y {
+            // Draw 8 symmetric points
+            let points = [
+                (cx + x, cy + y), (cx - x, cy + y),
+                (cx + x, cy - y), (cx - x, cy - y),
+                (cx + y, cy + x), (cx - y, cy + x),
+                (cx + y, cy - x), (cx - y, cy - x),
+            ];
+
+            for (px, py) in points {
+                if px >= 0 && px < self.width as i32 && py >= 0 && py < self.height as i32 {
+                    self.set_pixel(px as u32, py as u32, color);
+                }
+            }
+
+            if d < 0 {
+                d += 2 * x + 3;
+            } else {
+                d += 2 * (x - y) + 5;
+                y -= 1;
+            }
+            x += 1;
+        }
+    }
+
+    fn draw_text(&mut self, text: &str, position: Point, color: Color, size: f32) {
+        // Simple text rendering - just draw placeholder rectangles for now
+        // In a real implementation, this would use a font rendering library
+        let char_width = size * 0.6;
+        let char_height = size;
+        
+        for (i, _) in text.chars().enumerate() {
+            let x = position.x + i as f32 * char_width;
+            let y = position.y;
+            
+            let char_rect = Rect::new(x, y, char_width * 0.8, char_height);
+            self.draw_rect(char_rect, color);
+        }
+    }
+
+    fn draw_polygon(&mut self, points: &[Point], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+
+        // Simple polygon filling using scanline algorithm
+        let min_y = points.iter().map(|p| p.y as i32).min().unwrap_or(0);
+        let max_y = points.iter().map(|p| p.y as i32).max().unwrap_or(0);
+
+        for y in min_y..=max_y {
+            let mut intersections = Vec::new();
+
+            // Find intersections with polygon edges
+            for i in 0..points.len() {
+                let j = (i + 1) % points.len();
+                let p1 = points[i];
+                let p2 = points[j];
+
+                let y1 = p1.y as i32;
+                let y2 = p2.y as i32;
+
+                if (y1 <= y && y < y2) || (y2 <= y && y < y1) {
+                    let x = p1.x + (y as f32 - p1.y) * (p2.x - p1.x) / (p2.y - p1.y);
+                    intersections.push(x as i32);
+                }
+            }
+
+            // Sort intersections and fill between pairs
+            intersections.sort_unstable();
+            for chunk in intersections.chunks(2) {
+                if chunk.len() == 2 {
+                    self.draw_horizontal_line(chunk[0], chunk[1], y, color);
+                }
+            }
+        }
+    }
+
+    fn set_blend_mode(&mut self, mode: BlendMode) {
+        self.blend_mode = mode;
+    }
+}
