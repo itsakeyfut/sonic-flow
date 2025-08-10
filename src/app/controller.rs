@@ -423,6 +423,21 @@ impl AppController {
         debug!("Application controller shutdown completed");
         Ok(())
     }
+
+    /// Get visualizer system reference
+    pub fn visualizer_system(&self) -> &VisualizerSystem {
+        &self.visualizer_system
+    }
+
+    /// Get current visualizer frame
+    pub fn get_visualizer_frame(&self) -> Vec<u8> {
+        self.visualizer_system.get_frame()
+    }
+    
+    /// Get visualizer canvas size
+    pub fn get_visualizer_size(&self) -> (u32, u32) {
+        self.visualizer_system.size()
+    }
 }
 
 #[cfg(test)]
