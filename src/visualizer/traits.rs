@@ -348,3 +348,9 @@ impl From<Color> for PluginValue {
         PluginValue::Color(value)
     }
 }
+
+/// Type alias for visualizer factory function
+pub type VisualizerFactory = Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>;
+
+/// Type alias for visualizer registry
+pub type VisualizerRegistry = std::collections::HashMap<String, VisualizerFactory>;
