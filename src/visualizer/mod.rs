@@ -51,4 +51,9 @@ impl VisualizerSystem {
     pub fn stop(&self) -> Result<(), VisualizerError> {
         self.engine.stop()
     }
+
+    /// Update with spectrum data
+    pub fn update(&self, spectrum_data: crate::audio::analysis::SpectrumData) -> Result<(), VisualizerError> {
+        self.engine.update_spectrum(spectrum_data)
+    }
 }
