@@ -293,3 +293,22 @@ impl Default for VisualizationConfig {
         }
     }
 }
+
+impl Default for ColorScheme {
+    fn default() -> Self {
+        Self {
+            primary: Color::rgb(0.58, 0.2, 0.91), // Purple
+            secondary: Color::rgb(0.23, 0.51, 0.96), // Blue
+            background: Color::rgb(0.07, 0.07, 0.07), // Dark gray
+            gradient: vec![
+                Color::rgb(0.0, 0.0, 0.5),   // Dark blue
+                Color::rgb(0.0, 0.5, 1.0),   // Blue
+                Color::rgb(0.0, 1.0, 1.0),   // Cyan
+                Color::rgb(0.5, 1.0, 0.0),   // Green-yellow
+                Color::rgb(1.0, 1.0, 0.0),   // Yellow
+                Color::rgb(1.0, 0.5, 0.0),   // Orange
+                Color::rgb(1.0, 0.0, 0.0),   // Red
+            ],
+        }
+    }
+}
