@@ -130,3 +130,13 @@ pub enum ParameterType {
     Color,
     Enum(Vec<String>),
 }
+
+/// Plugin configuration value
+#[derive(Debug, Clone, PartialEq)]
+pub enum PluginValue {
+    Float(f32),
+    Integer(f32),
+    Boolean(f32),
+    String(String),
+    Color(Color),
+}
