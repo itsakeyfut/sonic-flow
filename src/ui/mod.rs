@@ -1,5 +1,5 @@
 //! User interface layer
-//! 
+//!
 //! Slint-based UI implementations with Rust integration
 
 pub mod bindings;
@@ -17,9 +17,7 @@ impl UiSystem {
     pub fn new(event_bus: crate::app::EventBus) -> Result<Self> {
         let main_window = MainWindowBinding::new(event_bus)?;
 
-        Ok(Self {
-            main_window,
-        })
+        Ok(Self { main_window })
     }
 
     /// Get main window binding

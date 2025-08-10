@@ -1,5 +1,5 @@
 //! Spectrum bars visualizer implementations
-//! 
+//!
 //! This visualizer displays frequency spectrum data as vertical bars,
 //! providing a classic and intuitive visualization of audio content.
 
@@ -9,8 +9,8 @@ use std::time::Instant;
 use crate::audio::analysis::SpectrumData;
 use crate::error::VisualizerError;
 use crate::visualizer::traits::{
-    BlendMode, Canvas, Color, ConfigParameter, ParameterType, PluginValue, Point,
-    Rect, VisualizationConfig, Visualizer, VisualizerMetadata,
+    BlendMode, Canvas, Color, ConfigParameter, ParameterType, PluginValue, Point, Rect,
+    VisualizationConfig, Visualizer, VisualizerMetadata,
 };
 
 /// Spectrum bars visualizer configuration
@@ -164,9 +164,7 @@ impl SpectrumBarsVisualizer {
         self.last_update = now;
 
         // Update frequency mapping if needed
-        if self.frequency_bins.len() != self.config.bar_count
-            || self.frequency_bins.is_empty()
-        {
+        if self.frequency_bins.len() != self.config.bar_count || self.frequency_bins.is_empty() {
             self.update_frequency_mapping(spectrum_data.bands.len());
         }
 
@@ -176,12 +174,8 @@ impl SpectrumBarsVisualizer {
         for (i, bar) in self.bars.iter_mut().enumerate() {
             // Get amplitude for this bar
             let bin_index = self.frequency_bins.get(i).copied().unwrap_or(0);
-            let amplitude = spectrum_data
-                .bands
-                .get(bin_index)
-                .copied()
-                .unwrap_or(0.0)
-                * sensitivity;
+            let amplitude =
+                spectrum_data.bands.get(bin_index).copied().unwrap_or(0.0) * sensitivity;
 
             // Update maximum amplitude for auto-gain
             if self.vis_config.auto_gain {
@@ -206,7 +200,8 @@ impl SpectrumBarsVisualizer {
             // Update smoothed height for animation
             if self.vis_config.smoothing {
                 let smoothing = self.smoothing_factor * self.vis_config.animation_speed;
-                bar.smoothed_height = bar.smoothed_height * smoothing + bar.height * (1.0 - smoothing);
+                bar.smoothed_height =
+                    bar.smoothed_height * smoothing + bar.height * (1.0 - smoothing);
             } else {
                 bar.smoothed_height = bar.height;
             }
@@ -219,8 +214,8 @@ impl SpectrumBarsVisualizer {
                 } else {
                     let hold_elapsed = now.duration_since(bar.peak_hold_start).as_secs_f32();
                     if hold_elapsed > self.config.peak_hold_time {
-                        bar.peak_height = (bar.peak_height - self.config.peak_fall_speed * dt)
-                            .max(bar.height);
+                        bar.peak_height =
+                            (bar.peak_height - self.config.peak_fall_speed * dt).max(bar.height);
                     }
                 }
             }
@@ -256,8 +251,12 @@ impl SpectrumBarsVisualizer {
             // Render bar based on style
             match self.config.bar_style {
                 BarStyle::Solid => self.render_solid_bar(canvas, x, y, bar_width, height, color),
-                BarStyle::Outlined => self.render_outlined_bar(canvas, x, y, bar_width, height, color),
-                BarStyle::Rounded => self.render_rounded_bar(canvas, x, y, bar_width, height, color),
+                BarStyle::Outlined => {
+                    self.render_outlined_bar(canvas, x, y, bar_width, height, color)
+                }
+                BarStyle::Rounded => {
+                    self.render_rounded_bar(canvas, x, y, bar_width, height, color)
+                }
                 BarStyle::Line => self.render_line_bar(canvas, x, y, bar_width, height, color),
             }
 
@@ -265,7 +264,7 @@ impl SpectrumBarsVisualizer {
             if self.config.show_peaks && bar.peak_height > bar.smoothed_height {
                 let peak_y = canvas_height - (min_height + bar.peak_height * height_range);
                 let peak_color = Color::rgba(color.r, color.g, color.b, 0.8);
-                
+
                 canvas.draw_line(
                     Point::new(x, peak_y),
                     Point::new(x + bar_width, peak_y),
@@ -326,12 +325,28 @@ impl SpectrumBarsVisualizer {
     }
 
     /// Render a solid bar
-    fn render_solid_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+    fn render_solid_bar(
+        &self,
+        canvas: &mut dyn Canvas,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Color,
+    ) {
         canvas.draw_rect(Rect::new(x, y, width, height), color);
     }
 
     /// Render an outlined bar
-    fn render_outlined_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+    fn render_outlined_bar(
+        &self,
+        canvas: &mut dyn Canvas,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Color,
+    ) {
         // Fill with transparent version
         let fill_color = Color::rgba(color.r, color.g, color.b, 0.3);
         canvas.draw_rect(Rect::new(x, y, width, height), fill_color);
@@ -339,19 +354,47 @@ impl SpectrumBarsVisualizer {
         // Draw outline
         let outline_width = 1.0;
         let bottom_y = y + height;
-        
+
         // Top
-        canvas.draw_line(Point::new(x, y), Point::new(x + width, y), color, outline_width);
+        canvas.draw_line(
+            Point::new(x, y),
+            Point::new(x + width, y),
+            color,
+            outline_width,
+        );
         // Bottom
-        canvas.draw_line(Point::new(x, bottom_y), Point::new(x + width, bottom_y), color, outline_width);
+        canvas.draw_line(
+            Point::new(x, bottom_y),
+            Point::new(x + width, bottom_y),
+            color,
+            outline_width,
+        );
         // Left
-        canvas.draw_line(Point::new(x, y), Point::new(x, bottom_y), color, outline_width);
+        canvas.draw_line(
+            Point::new(x, y),
+            Point::new(x, bottom_y),
+            color,
+            outline_width,
+        );
         // Right
-        canvas.draw_line(Point::new(x + width, y), Point::new(x + width, bottom_y), color, outline_width);
+        canvas.draw_line(
+            Point::new(x + width, y),
+            Point::new(x + width, bottom_y),
+            color,
+            outline_width,
+        );
     }
 
     /// Render a rounded bar (simplified as regular rect for now)
-    fn render_rounded_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+    fn render_rounded_bar(
+        &self,
+        canvas: &mut dyn Canvas,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Color,
+    ) {
         // TODO: Implement actual rounded corners
         // For now, just draw a solid bar with slightly smaller dimensions for visual effect
         let corner_radius = width.min(height) * 0.1;
@@ -365,10 +408,18 @@ impl SpectrumBarsVisualizer {
     }
 
     /// Render a line bar
-    fn render_line_bar(&self, canvas: &mut dyn Canvas, x: f32, y: f32, width: f32, height: f32, color: Color) {
+    fn render_line_bar(
+        &self,
+        canvas: &mut dyn Canvas,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Color,
+    ) {
         let center_x = x + width / 2.0;
         let bottom_y = y + height;
-        
+
         canvas.draw_line(
             Point::new(center_x, bottom_y),
             Point::new(center_x, y),
@@ -521,7 +572,7 @@ impl Visualizer for SpectrumBarsVisualizer {
 
     fn initialize(&mut self, config: &VisualizationConfig) -> Result<(), VisualizerError> {
         self.vis_config = config.clone();
-        
+
         // Initialize bars array with new count if changed
         if self.bars.len() != self.config.bar_count {
             self.bars = vec![BarState::default(); self.config.bar_count];
@@ -529,7 +580,7 @@ impl Visualizer for SpectrumBarsVisualizer {
 
         // Reset frequency mapping
         self.frequency_bins.clear();
-        
+
         Ok(())
     }
 
@@ -543,7 +594,10 @@ impl Visualizer for SpectrumBarsVisualizer {
         Ok(())
     }
 
-    fn configure(&mut self, settings: &HashMap<String, PluginValue>) -> Result<(), VisualizerError> {
+    fn configure(
+        &mut self,
+        settings: &HashMap<String, PluginValue>,
+    ) -> Result<(), VisualizerError> {
         // Update configuration based on settings
         for (key, value) in settings {
             match key.as_str() {
@@ -620,7 +674,7 @@ impl Visualizer for SpectrumBarsVisualizer {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -656,7 +710,7 @@ mod tests {
     fn test_spectrum_bars_creation() {
         let visualizer = SpectrumBarsVisualizer::new();
         let metadata = visualizer.metadata();
-        
+
         assert_eq!(metadata.id, "spectrum_bars");
         assert!(!metadata.name.is_empty());
         assert!(visualizer.supports_realtime());
@@ -667,7 +721,7 @@ mod tests {
     fn test_initialization() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let config = VisualizationConfig::default();
-        
+
         let result = visualizer.initialize(&config);
         assert!(result.is_ok());
     }
@@ -676,14 +730,17 @@ mod tests {
     fn test_configuration() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let mut settings = HashMap::new();
-        
+
         settings.insert("bar_count".to_string(), PluginValue::Integer(128));
         settings.insert("show_peaks".to_string(), PluginValue::Boolean(false));
-        settings.insert("bar_style".to_string(), PluginValue::String("Outlined".to_string()));
-        
+        settings.insert(
+            "bar_style".to_string(),
+            PluginValue::String("Outlined".to_string()),
+        );
+
         let result = visualizer.configure(&settings);
         assert!(result.is_ok());
-        
+
         assert_eq!(visualizer.config.bar_count, 128);
         assert!(!visualizer.config.show_peaks);
         assert_eq!(visualizer.config.bar_style, BarStyle::Outlined);
@@ -694,16 +751,13 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let config = VisualizationConfig::default();
         visualizer.initialize(&config).unwrap();
-        
-        let spectrum_data = SpectrumData::new(
-            vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.4, 0.3, 0.2],
-            0.5,
-            0.3,
-        );
-        
+
+        let spectrum_data =
+            SpectrumData::new(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.4, 0.3, 0.2], 0.5, 0.3);
+
         let result = visualizer.update(&spectrum_data);
         assert!(result.is_ok());
-        
+
         // Check that bars were updated
         assert!(visualizer.bars.iter().any(|bar| bar.height > 0.0));
     }
@@ -713,15 +767,11 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let config = VisualizationConfig::default();
         visualizer.initialize(&config).unwrap();
-        
+
         // Update with some data
-        let spectrum_data = SpectrumData::new(
-            vec![0.1, 0.2, 0.3, 0.4, 0.5],
-            0.5,
-            0.3,
-        );
+        let spectrum_data = SpectrumData::new(vec![0.1, 0.2, 0.3, 0.4, 0.5], 0.5, 0.3);
         visualizer.update(&spectrum_data).unwrap();
-        
+
         // Render to canvas
         let mut canvas = SoftwareCanvas::new(800, 600);
         let result = visualizer.render(&mut canvas);
@@ -731,27 +781,27 @@ mod tests {
     #[test]
     fn test_frequency_mapping() {
         let mut visualizer = SpectrumBarsVisualizer::new();
-        
+
         // Test linear mapping
         visualizer.config.logarithmic_scale = false;
         visualizer.create_linear_frequency_mapping(64);
         assert_eq!(visualizer.frequency_bins.len(), visualizer.config.bar_count);
-        
+
         // Bins should be increasing
         for i in 1..visualizer.frequency_bins.len() {
-            assert!(visualizer.frequency_bins[i] >= visualizer.frequency_bins[i-1]);
+            assert!(visualizer.frequency_bins[i] >= visualizer.frequency_bins[i - 1]);
         }
     }
 
     #[test]
     fn test_color_interpolation() {
         let visualizer = SpectrumBarsVisualizer::new();
-        
+
         // Test gradient interpolation
         let color_start = visualizer.interpolate_gradient_color(0.0);
         let color_mid = visualizer.interpolate_gradient_color(0.5);
         let color_end = visualizer.interpolate_gradient_color(1.0);
-        
+
         // Should get different colors
         assert_ne!(color_start.to_rgba32(), color_end.to_rgba32());
     }
@@ -760,16 +810,49 @@ mod tests {
     fn test_bar_styles() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let mut canvas = SoftwareCanvas::new(100, 100);
-        
+
         // Test different bar styles
-        for style in [BarStyle::Solid, BarStyle::Outlined, BarStyle::Rounded, BarStyle::Line] {
+        for style in [
+            BarStyle::Solid,
+            BarStyle::Outlined,
+            BarStyle::Rounded,
+            BarStyle::Line,
+        ] {
             visualizer.config.bar_style = style;
-            
+
             // Should render without panicking
-            visualizer.render_solid_bar(&mut canvas, 10.0, 10.0, 20.0, 30.0, Color::rgb(1.0, 0.0, 0.0));
-            visualizer.render_outlined_bar(&mut canvas, 40.0, 10.0, 20.0, 30.0, Color::rgb(0.0, 1.0, 0.0));
-            visualizer.render_rounded_bar(&mut canvas, 70.0, 10.0, 20.0, 30.0, Color::rgb(0.0, 0.0, 1.0));
-            visualizer.render_line_bar(&mut canvas, 10.0, 50.0, 20.0, 30.0, Color::rgb(1.0, 1.0, 0.0));
+            visualizer.render_solid_bar(
+                &mut canvas,
+                10.0,
+                10.0,
+                20.0,
+                30.0,
+                Color::rgb(1.0, 0.0, 0.0),
+            );
+            visualizer.render_outlined_bar(
+                &mut canvas,
+                40.0,
+                10.0,
+                20.0,
+                30.0,
+                Color::rgb(0.0, 1.0, 0.0),
+            );
+            visualizer.render_rounded_bar(
+                &mut canvas,
+                70.0,
+                10.0,
+                20.0,
+                30.0,
+                Color::rgb(0.0, 0.0, 1.0),
+            );
+            visualizer.render_line_bar(
+                &mut canvas,
+                10.0,
+                50.0,
+                20.0,
+                30.0,
+                Color::rgb(1.0, 1.0, 0.0),
+            );
         }
     }
 
@@ -778,18 +861,18 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         visualizer.config.show_peaks = true;
         visualizer.config.peak_hold_time = 1.0;
-        
+
         // Simulate high amplitude
         let high_spectrum = SpectrumData::new(vec![0.8; 64], 0.8, 0.6);
         visualizer.update_bars(&high_spectrum);
-        
+
         // Bars should have peak values
         assert!(visualizer.bars.iter().any(|bar| bar.peak_height > 0.5));
-        
+
         // Simulate low amplitude
         let low_spectrum = SpectrumData::new(vec![0.1; 64], 0.1, 0.1);
         visualizer.update_bars(&low_spectrum);
-        
+
         // Peaks should still be held
         assert!(visualizer.bars.iter().any(|bar| bar.peak_height > 0.5));
     }
@@ -798,20 +881,20 @@ mod tests {
     fn test_auto_gain() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         visualizer.vis_config.auto_gain = true;
-        
+
         // Start with high amplitude
         let high_spectrum = SpectrumData::new(vec![2.0; 64], 2.0, 1.5);
         visualizer.update_bars(&high_spectrum);
-        
+
         // Max amplitude should adapt
         assert!(visualizer.max_amplitude > 1.0);
-        
+
         // Switch to low amplitude
         for _ in 0..100 {
             let low_spectrum = SpectrumData::new(vec![0.1; 64], 0.1, 0.1);
             visualizer.update_bars(&low_spectrum);
         }
-        
+
         // Max amplitude should decrease towards new range
         assert!(visualizer.max_amplitude < 2.0);
     }
@@ -821,15 +904,15 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         visualizer.vis_config.smoothing = true;
         visualizer.smoothing_factor = 0.5;
-        
+
         // Start with zero
         let zero_spectrum = SpectrumData::new(vec![0.0; 64], 0.0, 0.0);
         visualizer.update_bars(&zero_spectrum);
-        
+
         // Jump to high value
         let high_spectrum = SpectrumData::new(vec![1.0; 64], 1.0, 0.8);
         visualizer.update_bars(&high_spectrum);
-        
+
         // Smoothed height should be between 0 and 1
         let smoothed = visualizer.bars[0].smoothed_height;
         assert!(smoothed > 0.0 && smoothed < 1.0);
@@ -838,17 +921,17 @@ mod tests {
     #[test]
     fn test_reset() {
         let mut visualizer = SpectrumBarsVisualizer::new();
-        
+
         // Set some state
         let spectrum = SpectrumData::new(vec![0.5; 64], 0.5, 0.3);
         visualizer.update_bars(&spectrum);
-        
+
         // Verify state exists
         assert!(visualizer.bars.iter().any(|bar| bar.height > 0.0));
-        
+
         // Reset
         visualizer.reset();
-        
+
         // All state should be cleared
         assert!(visualizer.bars.iter().all(|bar| bar.height == 0.0));
         assert!(visualizer.bars.iter().all(|bar| bar.peak_height == 0.0));
@@ -859,7 +942,7 @@ mod tests {
     #[test]
     fn test_gradient_directions() {
         let mut visualizer = SpectrumBarsVisualizer::new();
-        
+
         // Test all gradient directions
         for direction in [
             GradientDirection::None,
@@ -868,7 +951,7 @@ mod tests {
             GradientDirection::Radial,
         ] {
             visualizer.config.gradient_direction = direction;
-            
+
             // Should calculate colors without panicking
             for i in 0..visualizer.config.bar_count {
                 let color = visualizer.calculate_bar_color(0.5, i);
@@ -884,17 +967,17 @@ mod tests {
     fn test_bar_count_limits() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let mut settings = HashMap::new();
-        
+
         // Test minimum bar count
         settings.insert("bar_count".to_string(), PluginValue::Integer(4));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.bar_count, 8); // Should be clamped to minimum
-        
+
         // Test maximum bar count
         settings.insert("bar_count".to_string(), PluginValue::Integer(500));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.bar_count, 256); // Should be clamped to maximum
-        
+
         // Test normal bar count
         settings.insert("bar_count".to_string(), PluginValue::Integer(128));
         visualizer.configure(&settings).unwrap();
@@ -905,21 +988,21 @@ mod tests {
     fn test_parameter_validation() {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let mut settings = HashMap::new();
-        
+
         // Test float parameter clamping
         settings.insert("bar_width_ratio".to_string(), PluginValue::Float(-0.5));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.bar_width_ratio, 0.1); // Clamped to minimum
-        
+
         settings.insert("bar_width_ratio".to_string(), PluginValue::Float(1.5));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.bar_width_ratio, 1.0); // Clamped to maximum
-        
+
         // Test time parameter clamping
         settings.insert("peak_hold_time".to_string(), PluginValue::Float(-1.0));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.peak_hold_time, 0.0); // Clamped to minimum
-        
+
         settings.insert("peak_hold_time".to_string(), PluginValue::Float(10.0));
         visualizer.configure(&settings).unwrap();
         assert_eq!(visualizer.config.peak_hold_time, 5.0); // Clamped to maximum
@@ -928,16 +1011,16 @@ mod tests {
     #[test]
     fn test_frequency_range_handling() {
         let mut visualizer = SpectrumBarsVisualizer::new();
-        
+
         // Set custom frequency range
         visualizer.vis_config.frequency_range = (100.0, 10000.0);
-        
+
         // Update frequency mapping
         visualizer.update_frequency_mapping(512);
-        
+
         // Should have correct number of bins
         assert_eq!(visualizer.frequency_bins.len(), visualizer.config.bar_count);
-        
+
         // All bins should be valid indices
         for &bin in &visualizer.frequency_bins {
             assert!(bin < 512);
@@ -949,17 +1032,17 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let config = VisualizationConfig::default();
         visualizer.initialize(&config).unwrap();
-        
+
         // Test with empty spectrum data
         let empty_spectrum = SpectrumData::new(vec![], 0.0, 0.0);
         let result = visualizer.update(&empty_spectrum);
         assert!(result.is_ok());
-        
+
         // Test with single value spectrum
         let single_spectrum = SpectrumData::new(vec![0.5], 0.5, 0.3);
         let result = visualizer.update(&single_spectrum);
         assert!(result.is_ok());
-        
+
         // Test with very large spectrum
         let large_spectrum = SpectrumData::new(vec![0.1; 2048], 0.5, 0.3);
         let result = visualizer.update(&large_spectrum);
@@ -971,32 +1054,33 @@ mod tests {
         let mut visualizer = SpectrumBarsVisualizer::new();
         let config = VisualizationConfig::default();
         visualizer.initialize(&config).unwrap();
-        
+
         // Test with high bar count
         let mut settings = HashMap::new();
         settings.insert("bar_count".to_string(), PluginValue::Integer(256));
         visualizer.configure(&settings).unwrap();
-        
+
         let spectrum_data = SpectrumData::new(vec![0.5; 512], 0.5, 0.3);
-        
+
         // Measure update time
         let start = std::time::Instant::now();
         for _ in 0..100 {
             visualizer.update(&spectrum_data).unwrap();
         }
         let update_time = start.elapsed();
-        
+
         // Should complete quickly (less than 100ms for 100 updates)
         assert!(update_time < std::time::Duration::from_millis(100));
-        
+
         // Test rendering performance
         let mut canvas = SoftwareCanvas::new(1920, 1080);
         let start = std::time::Instant::now();
-        for _ in 0..60 { // Simulate 1 second at 60fps
+        for _ in 0..60 {
+            // Simulate 1 second at 60fps
             visualizer.render(&mut canvas).unwrap();
         }
         let render_time = start.elapsed();
-        
+
         // Should maintain 60fps (less than 1 second for 60 frames)
         assert!(render_time < std::time::Duration::from_secs(1));
     }
