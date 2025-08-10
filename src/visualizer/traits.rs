@@ -279,3 +279,17 @@ impl Point {
         (dx * dx + dy * dy).sqrt()
     }
 }
+
+impl Default for VisualizationConfig {
+    fn default() -> Self {
+        Self {
+            sensitivity: 1.0,
+            frequency_range: (20.0, 20000.0),
+            color_scheme: ColorScheme::default(),
+            animation_speed: 1.0,
+            smoothing: true,
+            auto_gain: true,
+            custom_params: HashMap::new(),
+        }
+    }
+}
