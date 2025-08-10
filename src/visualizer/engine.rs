@@ -181,4 +181,35 @@ impl VisualizerEngine {
             last_spectrum,
         })
     }
+
+    /// Set the active visualizer
+    pub fn set_visualizer(&self, visualizer_id: &str) -> Result<(), VisualizerError> {
+        debug!("Setting visualizer to: {}", visualizer_id);
+
+        // Check if visualizer exists
+        let visualizers = self.visualizers.read();
+        let factory = visualizers
+            .get(visualizer_id)
+            .ok_or_else(|| VisualizerError::PluginNotFound {
+                name: visualizer_id.to_string(),
+            })?;
+
+        // Create new visualizer instance
+        let mut new_visualizer = factory();
+
+        // Initialize with current configuration
+        let config = self.config.read().clone();
+        new_visualizer
+            .initialize(&config)
+            .map_err(|e| VisualizerError::Configuration(e.to_string()))?;
+
+        // Update active visualizer
+        *self.active_visualizer.write() = Some(new_visualizer);
+
+        // Send command to worker
+        self.send_command(VisualizerCommand::SetVisualizer(visualizer_id.to_string()))?;
+
+        info!("Visualizer changed to: {}", visualizer_id);
+        Ok(())
+    }
 }
