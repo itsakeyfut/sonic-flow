@@ -11,13 +11,14 @@ use std::time::Duration;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, broadcast};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::error::AudioError;
 use crate::TrackId;
 
+use super::analysis::{SpectrumAnalyzer, SpectrumData};
 use super::traits::{
     AudioFormat, AudioFormatType, PlaybackControl, PlaybackState, PlaybackStatus, TrackLoader,
     VolumeControl,
@@ -80,6 +81,8 @@ pub struct AudioEngine {
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Track information cache
     tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
+    /// Spectrum data broadcaster
+    spectrum_sender: broadcast::Sender<SpectrumData>,
 }
 
 /// Internal audio engine worker that runs on a dedicated thread
@@ -96,6 +99,14 @@ struct AudioEngineWorker {
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Command receiver
     command_receiver: mpsc::UnboundedReceiver<AudioCommand>,
+    /// Spectrum analyzer
+    spectrum_analyzer: SpectrumAnalyzer,
+    /// Spectrum data broadcaster
+    spectrum_sender: broadcast::Sender<SpectrumData>,
+    /// Audio buffer for analysis
+    audio_buffer: Vec<f32>,
+    /// Buffer position for circular buffering
+    buffer_position: usize,
 }
 
 impl AudioEngine {
@@ -105,6 +116,7 @@ impl AudioEngine {
 
         // Create communication channels
         let (command_sender, command_receiver) = mpsc::unbounded_channel();
+        let (spectrum_sender, _) = broadcast::channel(100);
 
         // Initialize shared state
         let status = Arc::new(RwLock::new(AudioEngineStatus {
@@ -121,6 +133,7 @@ impl AudioEngine {
         // Clone for worker thread
         let worker_status = Arc::clone(&status);
         let worker_tracks = Arc::clone(&tracks);
+        let worker_spectrum_sender = spectrum_sender.clone();
 
         // Spawn the audio processing thread on a dedicated thread pool
         let audio_thread = std::thread::spawn(move || {
@@ -131,8 +144,12 @@ impl AudioEngine {
                 .expect("Failed to create audio runtime");
 
             rt.block_on(async move {
-                let worker =
-                    AudioEngineWorker::new(worker_status, worker_tracks, command_receiver).await;
+                let worker = AudioEngineWorker::new(
+                    worker_status,
+                    worker_tracks,
+                    command_receiver,
+                    worker_spectrum_sender,
+                ).await;
 
                 match worker {
                     Ok(mut worker) => {
@@ -152,7 +169,22 @@ impl AudioEngine {
             _audio_thread: audio_thread,
             status,
             tracks,
+            spectrum_sender,
         })
+    }
+
+    /// Subscribe to spectrum data updates
+    pub fn subscribe_spectrum(&self) -> broadcast::Receiver<SpectrumData> {
+        self.spectrum_sender.subscribe()
+    }
+
+    /// Get the latest spectrum data (if available)
+    pub fn get_current_spectrum(&self) -> Option<SpectrumData> {
+        // Try to get the latest spectrum data from the broadcast channel
+        match self.spectrum_sender.subscribe().try_recv() {
+            Ok(spectrum) => Some(spectrum),
+            Err(_) => None,
+        }
     }
 
     /// Send a command to the audio engine worker
@@ -184,12 +216,24 @@ impl AudioEngineWorker {
         status: Arc<RwLock<AudioEngineStatus>>,
         tracks: Arc<RwLock<HashMap<TrackId, TrackInfo>>>,
         command_receiver: mpsc::UnboundedReceiver<AudioCommand>,
+        spectrum_sender: broadcast::Sender<SpectrumData>,
     ) -> Result<Self, AudioError> {
         // Initialize rodio output stream
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| AudioError::Device(format!("Failed to initialize audio output: {}", e)))?;
 
-        debug!("Audio output stream initialized");
+        // Initialize spectrum analyzer
+        let spectrum_analyzer = SpectrumAnalyzer::new(
+            2048, // FFT size
+            44100, // Sample rate
+            64, // Output bands
+        );
+
+        // Initialize audio buffer for analysis (circular buffer)
+        let buffer_size = 8192; // Large enough to hold sufficient audio data
+        let audio_buffer = vec![0.0; buffer_size];
+
+        debug!("Audio output stream and spectrum analyzer initialized");
 
         Ok(Self {
             _stream: stream,
@@ -198,6 +242,10 @@ impl AudioEngineWorker {
             tracks,
             status,
             command_receiver,
+            spectrum_analyzer,
+            spectrum_sender,
+            audio_buffer,
+            buffer_position: 0,
         })
     }
 
@@ -205,18 +253,85 @@ impl AudioEngineWorker {
     async fn run(&mut self) {
         debug!("Audio engine worker started");
 
-        while let Some(command) = self.command_receiver.recv().await {
-            match self.handle_command(command).await {
-                Ok(()) => {}
-                Err(e) => {
-                    error!("Audio engine command failed: {}", e);
-                    // Update status to error state
-                    self.status.write().state = PlaybackState::Error(e.to_string());
+        let mut spectrum_update_interval = tokio::time::interval(Duration::from_millis(16)); // ~60fps
+
+        loop {
+            tokio::select! {
+                // Handle commands
+                command = self.command_receiver.recv() => {
+                    match command {
+                        Some(cmd) => {
+                            match self.handle_command(cmd).await {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    error!("Audio engine command failed: {}", e);
+                                    self.status.write().state = PlaybackState::Error(e.to_string());
+                                }
+                            }
+                        }
+                        None => {
+                            debug!("Audio command channel closed");
+                            break;
+                        }
+                    }
+                }
+
+                // Update spectrum analysis
+                _ = spectrum_update_interval.tick() => {
+                    if let Err(e) = self.update_spectrum_analysis().await {
+                        error!("Spectrum analysis update failed: {}", e);
+                    }
                 }
             }
         }
 
         debug!("Audio engine worker shutting down");
+    }
+
+    /// Update spectrum analysis with current audio data
+    async fn update_spectrum_analysis(&mut self) -> Result<(), AudioError> {
+        // Only analyze if we're playing
+        let state = self.status.read().state.clone();
+        if state != PlaybackState::Playing {
+            return Ok(());
+        }
+
+        // Check if we have a sink and it's not empty
+        if let Some(ref sink) = self.sink {
+            if sink.empty() {
+                return Ok(());
+            }
+
+            // Generate dummy audio data for now (in real implementation,
+            // we would need to tap into the audio stream)
+            let current_time = std::time::Instant::now();
+            let time_secs = current_time.elapsed().as_secs_f32();
+
+            // Create realistic-looking spectrum data
+            let mut samples = Vec::with_capacity(2048);
+            for i in 0..2048 {
+                let t = time_secs + (i as f32 / 44100.0);
+                // Mix multiple frequencies for a realistic spectrum
+                let sample = 
+                    0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
+                    0.2 * (2.0 * std::f32::consts::PI * 880.0 * t).sin() +  // A5
+                    0.1 * (2.0 * std::f32::consts::PI * 220.0 * t).sin() +  // A3
+                    0.1 * (2.0 * std::f32::consts::PI * 1760.0 * t).sin(); // A6
+                
+                samples.push(sample * 0.5); // Reduce amplitude
+            }
+
+            // Analyze the audio data
+            let spectrum_data = self.spectrum_analyzer.analyze(&samples);
+
+            // Broadcast spectrum data
+            if let Err(e) = self.spectrum_sender.send(spectrum_data) {
+                // Channel might be full or have no listeners, which is OK
+                debug!("Failed to send spectrum data: {}", e);
+            }
+        }
+
+        Ok(())
     }
 
     /// Handle a single audio command

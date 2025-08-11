@@ -5,6 +5,7 @@ pub mod fft;
 // pub mod meter;
 
 use std::time::Duration;
+pub use fft::SpectrumAnalyzer;
 
 /// Spectrum analysis data
 #[derive(Debug, Clone)]
