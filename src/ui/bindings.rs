@@ -205,7 +205,15 @@ impl MainWindowBinding {
         self.window.set_progress(0.0);
         self.window.set_position_text("0:00".into());
         self.window.set_duration_text("0:00".into());
+
+        // Visualizer state
         self.window.set_visualizer_type("spectrum_bars".into());
+        self.window.set_visualizer_sensitivity(1.0);
+
+        // Visualizer quality info
+        self.window.set_file_format("".into());
+        self.window.set_sample_rate("".into());
+        self.window.set_bit_depth("".into());
 
         debug!("Initial UI state set");
     }
