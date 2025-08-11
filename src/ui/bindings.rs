@@ -368,6 +368,20 @@ impl MainWindowBinding {
         
         debug!("Updated UI from audio status: {:?}", status.state);
     }
+
+    /// Show an error message in the UI
+    pub fn show_error(&self, error: &str) {
+        error!("UI Error: {}", error);
+        // TODO: Implement actual error display in UI
+        // For now, we just log it
+    }
+
+    /// Show an info message in the UI
+    pub fn show_info(&self, message: &str) {
+        info!("UI Info: {}", message);
+        // TODO: Implement actual info display in UI
+        // For now, we just log it
+    }
 }
 
 /// Format a `Duration` as `mm:ss`
