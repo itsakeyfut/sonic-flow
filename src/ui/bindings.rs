@@ -133,8 +133,18 @@ impl MainWindowBinding {
             let event_bus = event_bus.clone();
             move |visualizer_type| {
                 debug!("Visualizer changed to: {}", visualizer_type);
+                let visualizer_id = match visualizer_type.as_str() {
+                    "Spectrum Bars" => "spectrum_bars",
+                    "Waveform" => "waveform",
+                    "Circle Spectrum" => "circle_spectrum",
+                    "Particle System" => "particle_system",
+                    "3D Spectrum" => "spectrum_3d",
+                    "VU Meters" => "vu_meters",
+                    _ => "spectrum_bars",
+                };
+                
                 if let Err(e) =
-                    event_bus.publish(AppEvent::VisualizerChanged(visualizer_type.to_string()))
+                    event_bus.publish(AppEvent::VisualizerChanged(visualizer_id.to_string()))
                 {
                     error!("Failed to publish visualizer change event: {}", e);
                 }
