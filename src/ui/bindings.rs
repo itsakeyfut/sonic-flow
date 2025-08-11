@@ -283,6 +283,9 @@ impl MainWindowBinding {
             .set_position_text(format_duration(position).into());
         self.window
             .set_duration_text(format_duration(duration).into());
+
+        debug!("Updated progress: {:.2}% ({:?}/{:?})", 
+               progress * 100.0, position, duration);
     }
 
     /// Update the selected visualizer type in the UI
