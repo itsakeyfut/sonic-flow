@@ -180,6 +180,15 @@ impl MainWindowBinding {
             }
         });
 
+        // Fullscreen toggle
+        self.window.on_fullscreen_toggled({
+            move || {
+                debug!("Fullscreen toggle clicked");
+                // TODO: Implement fullscreen visualizer mode
+                warn!("Fullscreen visualizer not yet implemented");
+            }
+        });
+
         debug!("UI event handlers setup completed");
         Ok(())
     }
