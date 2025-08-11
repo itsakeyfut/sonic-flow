@@ -323,6 +323,9 @@ component VisualizerCanvas inherits Rectangle {
 component NowPlayingInfo inherits Rectangle {
     in-out property <string> current-track: "No track loaded";
     in-out property <string> playback-state: "Stopped";
+    in-out property <string> file-format: "";
+    in-out property <string> sample-rate: "";
+    in-out property <string> bit-depth: "";
     
     background: ColorTheme.surface;
     border-radius: ColorTheme.border-radius;
@@ -337,12 +340,15 @@ component NowPlayingInfo inherits Rectangle {
             font-weight: 700;
             font-size: 16px;
         }
-        
-        Text {
-            text: root.current-track;
-            color: ColorTheme.text-primary;
-            font-size: 14px;
-            wrap: word-wrap;
+
+        ScrollView {
+            height: 60px;
+            Text {
+                text: root.current-track;
+                color: ColorTheme.text-primary;
+                font-size: 14px;
+                wrap: word-wrap;
+            }
         }
         
         Rectangle {
@@ -350,12 +356,58 @@ component NowPlayingInfo inherits Rectangle {
             background: ColorTheme.border;
         }
         
-        Text {
-            text: "Status: " + root.playback-state;
-            color: ColorTheme.text-secondary;
-            font-size: 12px;
+        HorizontalBox {
+            spacing: 8px;
+
+            Rectangle {
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: root.playback-state == "Playing" ? ColorTheme.accent :
+                            root.playback-state == "Paused" ? ColorTheme.secondary : ColorTheme.text-secondary;
+            }
+
+            Text {
+                text: root.playback-state;
+                color: ColorTheme.text-primary;
+                font-size: 12px;
+                font-weight: 500;
+                vertical-alignment: center;
+            }
         }
-        
+
+        // 音量情報
+        if root.file-format != "": VerticalBox {
+            spacing: 4px;
+
+            Text {
+                text: "Audio Quality";
+                color: ColorTheme.text-secondary;
+                font-size: 11px;
+                font-weight: 600;
+            }
+
+            Text {
+                text: "Format: " + root.file-format;
+                color: ColorTheme.text-secondary;
+                font-size: 10px;
+            }
+
+            if root.sample-rate != "": Text {
+                text: "Sample Rate: " + root.sample-rate;
+                color: ColorTheme.text-secondary;
+                font-size: 10px;
+            }
+
+            if root.bit-depth != "": Text {
+                text: "Bit Depth: " + root.bit-depth;
+                color: ColorTheme.text-secondary;
+                font-size: 10px;
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
         // TODO: アルバムアートワーク
         Rectangle {
             height: 150px;
