@@ -267,6 +267,7 @@ impl MainWindowBinding {
     /// Update volume in the UI
     pub fn update_volume(&self, volume: f32) {
         self.window.set_volume(volume);
+        debug!("Updated volume: {:.2}", volume);
     }
 
     /// Update playback progress in the UI
