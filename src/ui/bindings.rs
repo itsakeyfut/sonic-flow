@@ -304,6 +304,12 @@ impl MainWindowBinding {
         debug!("Updated visualizer type: {} ({})", display_name, visualizer_type);
     }
 
+    /// Update visualizer sensitivity
+    pub fn update_visualizer_sensitivity(&self, sensitivity: f32) {
+        self.window.set_visualizer_sensitivity(sensitivity);
+        debug!("Updated visualizer sensitivity: {:.2}", sensitivity);
+    }
+
     /// Show the main window
     pub fn show(&self) -> Result<()> {
         self.window
