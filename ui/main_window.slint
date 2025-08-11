@@ -425,7 +425,7 @@ component NowPlayingInfo inherits Rectangle {
     }
 }
 
-// ライブラリブラウザー（プレースホルダー）
+// ライブラリブラウザー（シンプル版）
 component LibraryBrowser inherits Rectangle {
     background: ColorTheme.surface;
     border-radius: ColorTheme.border-radius;
@@ -436,34 +436,57 @@ component LibraryBrowser inherits Rectangle {
         
         HorizontalBox {
             Text {
-                text: "Music Library";
+                text: "Quick Actions";
                 color: ColorTheme.text-primary;
                 font-weight: 700;
                 font-size: 16px;
             }
             
             Rectangle { horizontal-stretch: 1; }
+        }
+        
+        // クイックアクション
+        VerticalBox {
+            spacing: 8px;
             
             Button {
-                text: "Scan";
-                width: 60px;
-                height: 30px;
+                text: "📁 Load Audio File";
+                height: 40px;
+            }
+            
+            Button {
+                text: "🎵 Demo Track";
+                height: 40px;
+            }
+            
+            Button {
+                text: "🔍 Browse Library";
+                height: 40px;
+                enabled: false;
             }
         }
         
-        // 検索バー
-        LineEdit {
-            placeholder-text: "Search music...";
-            height: 35px;
+        Rectangle {
+            height: 1px;
+            background: ColorTheme.border;
         }
         
-        // トラックリスト（プレースホルダー）
+        Text {
+            text: "Recent Files";
+            color: ColorTheme.text-primary;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        // 最近のファイル（プレースホルダー）
         ScrollView {
+            height: 200px;
+            
             VerticalBox {
                 spacing: 4px;
                 
-                for i in 10: Rectangle {
-                    height: 40px;
+                for i in 5: Rectangle {
+                    height: 30px;
                     background: Math.mod(i, 2) == 0 ? ColorTheme.surface-variant : transparent;
                     border-radius: 4px;
                     
@@ -471,9 +494,10 @@ component LibraryBrowser inherits Rectangle {
                         padding: 8px;
                         
                         Text {
-                            text: "Track " + (i + 1);
-                            color: ColorTheme.text-primary;
+                            text: "Sample Track " + (i + 1) + ".mp3";
+                            color: ColorTheme.text-secondary;
                             vertical-alignment: center;
+                            font-size: 12px;
                         }
                         
                         Rectangle { horizontal-stretch: 1; }
@@ -481,7 +505,7 @@ component LibraryBrowser inherits Rectangle {
                         Text {
                             text: "3:45";
                             color: ColorTheme.text-secondary;
-                            font-size: 12px;
+                            font-size: 11px;
                             vertical-alignment: center;
                         }
                     }
