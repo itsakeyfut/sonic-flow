@@ -151,6 +151,20 @@ impl MainWindowBinding {
             }
         });
 
+        // Visualizer sensitivity change
+        self.window.on_visualizer_sensitivity_changed({
+            let event_bus = event_bus.clone();
+            move |sensitivity| {
+                debug!("Visualizer sensitivity changed to: {:.2}", sensitivity);
+                if let Err(e) = event_bus.publish(AppEvent::VisualizerConfigChanged {
+                    sensitivity,
+                    color_scheme: "default".to_string(), // TODO: Make this configurable
+                }) {
+                    error!("Failed to publish sensitivity change event: {}", e);
+                }
+            }
+        });
+
         debug!("UI event handlers setup completed");
         Ok(())
     }
