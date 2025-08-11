@@ -223,6 +223,9 @@ impl MainWindowBinding {
         self.window.set_is_playing(is_playing);
         self.window.set_is_paused(is_paused);
         self.window.set_playback_state(state_text.into());
+
+        debug!("Updated playback state: playing={}, paused={}, state={}", 
+                is_playing, is_paused, state_text);
     }
 
     /// Update the displayed current track info
@@ -237,6 +240,28 @@ impl MainWindowBinding {
         };
 
         self.window.set_current_track(track_text.into());
+
+        // Update audio format information if available
+        if let Some(track) = track_info {
+            // Extract file extension as format
+            let format = track.file_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("Unknown")
+                .to_uppercase();
+            
+            self.window.set_file_format(format.into());
+            
+            // TODO: Get actual sample rate and bit depth from track metadata
+            self.window.set_sample_rate("44.1 kHz".into());
+            self.window.set_bit_depth("16 bit".into());
+        } else {
+            self.window.set_file_format("".into());
+            self.window.set_sample_rate("".into());
+            self.window.set_bit_depth("".into());
+        }
+        
+        debug!("Updated current track: {:?}", track_info.map(|t| &t.title));
     }
 
     /// Update volume in the UI
