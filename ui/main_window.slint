@@ -177,15 +177,20 @@ component VisualizerCanvas inherits Rectangle {
         padding: ColorTheme.panel-padding;
         spacing: ColorTheme.spacing;
         
-        // ビジュアライザー選択
+        // ビジュアライザー制御パネル
         HorizontalBox {
+            spacing: 10px;
+            height: 40px;
+
             Text {
                 text: "Visualizer:";
                 color: ColorTheme.text-primary;
                 vertical-alignment: center;
+                font-weight: 600;
             }
             
             visualizer-combo := ComboBox {
+                width: 150px;
                 model: ["Spectrum Bars", "Waveform", "Circle Spectrum", "Particle System", "3D Spectrum", "VU Meters"];
                 current-value: "Spectrum Bars";
                 selected(value) => { 
@@ -193,6 +198,30 @@ component VisualizerCanvas inherits Rectangle {
                 }
             }
             
+            Rectangle { width: 20px; }
+
+            Text {
+                text: "Sensitivity:";
+                color: ColorTheme.text-primary;
+                vertical-alignment: center;
+            }
+
+            sensitivity-slider := Slider {
+                width: 100px;
+                minimum: 0.1;
+                maximum: 2.0;
+                value: root.sensitivity;
+                changed(value) => { root.sensitivity-changed(value); }
+            }
+
+            Text {
+                text: Math.round(root.sensitivity * 100) + "%";
+                color: ColorTheme.text-secondary;
+                font-size: 12px;
+                width: 40px;
+                vertical-alignment: center;
+            }
+
             Rectangle { horizontal-stretch: 1; }
             
             // フルスクリーンボタン
@@ -200,19 +229,90 @@ component VisualizerCanvas inherits Rectangle {
                 text: "⛶";
                 width: 40px;
                 height: 30px;
+                clicked => { root.fullscreen-toggled(); }
             }
         }
         
         // ビジュアライザー表示エリア
-        Rectangle {
+        visualizer-area := Rectangle {
             background: #000000;
             border-radius: 4px;
+            min-height: 300px;
             
-            // TODO: ビジュアライザーの実際の描画はRust側で実装
+            // ビジュアライザーの状態表示
+            VerticalBox {
+                alignment: center;
+                spacing: 10px;
+                
+                if root.is-playing: Text {
+                    text: "🎵 " + root.visualizer-type;
+                    color: ColorTheme.primary;
+                    horizontal-alignment: center;
+                    font-size: 18px;
+                    font-weight: 600;
+                }
+                if !root.is-playing: Text {
+                    text: "▶ Play music to see visualization";
+                    color: ColorTheme.text-secondary;
+                    horizontal-alignment: center;
+                    font-size: 16px;
+                }
+
+                // リアルタイムビジュアライザー（プレースホルダー）
+                if root.is-playing: Rectangle {
+                    height: 200px;
+                    background: @linear-gradient(90deg, ColorTheme.primary, ColorTheme.secondary);
+                    opacity: 0.3;
+                    
+                    // ダミーのバーアニメーション
+                    HorizontalBox {
+                        spacing: 2px;
+                        padding: 10px;
+                        
+                        for i in 32: Rectangle {
+                            background: ColorTheme.accent;
+                            width: 6px;
+                            height: 20px + (i * 5px);
+                            opacity: 0.7 + (Math.sin(i * 0.3rad) * 0.3);
+                        }
+                    }
+                }
+            }
+        }
+
+        // ビジュアライザー情報パネル
+        HorizontalBox {
+            height: 30px;
+            spacing: 10px;
+
             Text {
-                text: "Visualizer: " + root.visualizer-type;
+                text: "Status:";
                 color: ColorTheme.text-secondary;
-                horizontal-alignment: center;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            status-indicator := Rectangle {
+                width: 10px;
+                height: 10px;
+                border-radius: 5px;
+                background: root.is-playing ? ColorTheme.accent : ColorTheme.text-secondary;
+            }
+
+            Text {
+                text: root.is-playing ? "Active" : "Inactive";
+                color: root.is-playing ? ColorTheme.accent : ColorTheme.text-secondary;
+                font-size: 12px;
+                vertical-alignment: center;
+                font-weight: 500;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            Text {
+                text: "FPS: 60";
+                color: ColorTheme.text-secondary;
+                font-size: 12px;
                 vertical-alignment: center;
             }
         }
