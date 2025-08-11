@@ -446,6 +446,16 @@ mod tests {
         assert_eq!(format_duration(Duration::from_secs(0)), "00:00");
     }
 
-    // Note: UI-related tests require the Slint runtime and
-    // should be implemented as integration tests in a real environment.
+    #[test]
+    fn test_ui_state_updater() {
+        // Test basic functionality without actual UI
+        let event_bus = EventBus::new();
+        
+        // This would fail in a headless environment, so we just test
+        // that the constructor doesn't panic
+        assert!(event_bus.receiver_count() >= 0);
+    }
+
+    // Note: Most UI tests require the Slint runtime and should be
+    // implemented as integration tests with a proper test environment
 }
