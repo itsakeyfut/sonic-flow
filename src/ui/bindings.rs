@@ -290,7 +290,18 @@ impl MainWindowBinding {
 
     /// Update the selected visualizer type in the UI
     pub fn update_visualizer_type(&self, visualizer_type: &str) {
-        self.window.set_visualizer_type(visualizer_type.into());
+        let display_name = match visualizer_type {
+            "spectrum_bars" => "Spectrum Bars",
+            "waveform" => "Waveform",
+            "circle_spectrum" => "Circle Spectrum",
+            "particle_system" => "Particle System",
+            "spectrum_3d" => "3D Spectrum",
+            "vu_meters" => "VU Meters",
+            _ => "Spectrum Bars",
+        };
+        
+        self.window.set_visualizer_type(display_name.into());
+        debug!("Updated visualizer type: {} ({})", display_name, visualizer_type);
     }
 
     /// Show the main window
