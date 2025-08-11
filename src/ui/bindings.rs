@@ -165,6 +165,21 @@ impl MainWindowBinding {
             }
         });
 
+        // Load track button
+        self.window.on_load_track_clicked({
+            let event_bus = event_bus.clone();
+            move || {
+                debug!("Load track button clicked");
+                // For now, we'll use a dummy file path
+                // In a real implementation, this would open a file dialog
+                let dummy_path = "/path/to/sample.mp3";
+                info!("Would open file dialog to load track (placeholder: {})", dummy_path);
+                
+                // TODO: Implement file dialog and actual track loading
+                // For demo purposes, we could load a sample file if available
+            }
+        });
+
         debug!("UI event handlers setup completed");
         Ok(())
     }
