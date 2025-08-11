@@ -414,6 +414,14 @@ impl UiStateUpdater {
             warn!("Attempted to update UI but window is no longer available");
         }
     }
+
+    /// Update visualizer display state
+    pub fn update_visualizer_state(&self, is_active: bool, fps: f32) {
+        self.update_ui(|window| {
+            // TODO: Add FPS and activity indicators to UI
+            debug!("Visualizer state: active={}, fps={:.1}", is_active, fps);
+        });
+    }
 }
 
 #[cfg(test)]
