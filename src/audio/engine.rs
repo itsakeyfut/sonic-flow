@@ -11,7 +11,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
-use tokio::sync::{mpsc, oneshot, broadcast};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -149,7 +149,8 @@ impl AudioEngine {
                     worker_tracks,
                     command_receiver,
                     worker_spectrum_sender,
-                ).await;
+                )
+                .await;
 
                 match worker {
                     Ok(mut worker) => {
@@ -224,9 +225,9 @@ impl AudioEngineWorker {
 
         // Initialize spectrum analyzer
         let spectrum_analyzer = SpectrumAnalyzer::new(
-            2048, // FFT size
+            2048,  // FFT size
             44100, // Sample rate
-            64, // Output bands
+            64,    // Output bands
         );
 
         // Initialize audio buffer for analysis (circular buffer)
@@ -312,12 +313,11 @@ impl AudioEngineWorker {
             for i in 0..2048 {
                 let t = time_secs + (i as f32 / 44100.0);
                 // Mix multiple frequencies for a realistic spectrum
-                let sample = 
-                    0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
+                let sample = 0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
                     0.2 * (2.0 * std::f32::consts::PI * 880.0 * t).sin() +  // A5
                     0.1 * (2.0 * std::f32::consts::PI * 220.0 * t).sin() +  // A3
                     0.1 * (2.0 * std::f32::consts::PI * 1760.0 * t).sin(); // A6
-                
+
                 samples.push(sample * 0.5); // Reduce amplitude
             }
 

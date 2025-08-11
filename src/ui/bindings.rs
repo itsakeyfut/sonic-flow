@@ -143,7 +143,7 @@ impl MainWindowBinding {
                     "VU Meters" => "vu_meters",
                     _ => "spectrum_bars",
                 };
-                
+
                 if let Err(e) =
                     event_bus.publish(AppEvent::VisualizerChanged(visualizer_id.to_string()))
                 {
@@ -174,8 +174,11 @@ impl MainWindowBinding {
                 // For now, we'll use a dummy file path
                 // In a real implementation, this would open a file dialog
                 let dummy_path = "/path/to/sample.mp3";
-                info!("Would open file dialog to load track (placeholder: {})", dummy_path);
-                
+                info!(
+                    "Would open file dialog to load track (placeholder: {})",
+                    dummy_path
+                );
+
                 // TODO: Implement file dialog and actual track loading
                 // For demo purposes, we could load a sample file if available
             }
@@ -225,8 +228,10 @@ impl MainWindowBinding {
         self.window.set_is_paused(is_paused);
         self.window.set_playback_state(state_text.into());
 
-        debug!("Updated playback state: playing={}, paused={}, state={}", 
-                is_playing, is_paused, state_text);
+        debug!(
+            "Updated playback state: playing={}, paused={}, state={}",
+            is_playing, is_paused, state_text
+        );
     }
 
     /// Update the displayed current track info
@@ -245,14 +250,15 @@ impl MainWindowBinding {
         // Update audio format information if available
         if let Some(track) = track_info {
             // Extract file extension as format
-            let format = track.file_path
+            let format = track
+                .file_path
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("Unknown")
                 .to_uppercase();
-            
+
             self.window.set_file_format(format.into());
-            
+
             // TODO: Get actual sample rate and bit depth from track metadata
             self.window.set_sample_rate("44.1 kHz".into());
             self.window.set_bit_depth("16 bit".into());
@@ -261,7 +267,7 @@ impl MainWindowBinding {
             self.window.set_sample_rate("".into());
             self.window.set_bit_depth("".into());
         }
-        
+
         debug!("Updated current track: {:?}", track_info.map(|t| &t.title));
     }
 
@@ -285,8 +291,12 @@ impl MainWindowBinding {
         self.window
             .set_duration_text(format_duration(duration).into());
 
-        debug!("Updated progress: {:.2}% ({:?}/{:?})", 
-               progress * 100.0, position, duration);
+        debug!(
+            "Updated progress: {:.2}% ({:?}/{:?})",
+            progress * 100.0,
+            position,
+            duration
+        );
     }
 
     /// Update the selected visualizer type in the UI
@@ -300,9 +310,12 @@ impl MainWindowBinding {
             "vu_meters" => "VU Meters",
             _ => "Spectrum Bars",
         };
-        
+
         self.window.set_visualizer_type(display_name.into());
-        debug!("Updated visualizer type: {} ({})", display_name, visualizer_type);
+        debug!(
+            "Updated visualizer type: {} ({})",
+            display_name, visualizer_type
+        );
     }
 
     /// Update visualizer sensitivity
@@ -351,21 +364,22 @@ impl MainWindowBinding {
     /// Update all UI state from an audio engine status
     pub fn update_from_audio_status(&self, status: &AudioEngineStatus) {
         // Update playback state
-        let (is_playing, is_paused, state_text): (bool, bool, Cow<'static, str>) = match status.state {
-            PlaybackState::Playing   => (true,  false, Cow::Borrowed("Playing")),
-            PlaybackState::Paused    => (false, true,  Cow::Borrowed("Paused")),
-            PlaybackState::Stopped   => (false, false, Cow::Borrowed("Stopped")),
-            PlaybackState::Buffering => (false, false, Cow::Borrowed("Buffering")),
-            PlaybackState::Error(ref e) => (false, false, Cow::Owned(format!("Error: {}", e))),
-        };
+        let (is_playing, is_paused, state_text): (bool, bool, Cow<'static, str>) =
+            match status.state {
+                PlaybackState::Playing => (true, false, Cow::Borrowed("Playing")),
+                PlaybackState::Paused => (false, true, Cow::Borrowed("Paused")),
+                PlaybackState::Stopped => (false, false, Cow::Borrowed("Stopped")),
+                PlaybackState::Buffering => (false, false, Cow::Borrowed("Buffering")),
+                PlaybackState::Error(ref e) => (false, false, Cow::Owned(format!("Error: {}", e))),
+            };
 
         self.update_playback_state(is_playing, is_paused, &state_text);
         self.update_volume(status.volume);
-        
+
         if let Some(duration) = status.duration {
             self.update_progress(status.position, duration);
         }
-        
+
         debug!("Updated UI from audio status: {:?}", status.state);
     }
 
@@ -450,7 +464,7 @@ mod tests {
     fn test_ui_state_updater() {
         // Test basic functionality without actual UI
         let event_bus = EventBus::new();
-        
+
         // This would fail in a headless environment, so we just test
         // that the constructor doesn't panic
         assert!(event_bus.receiver_count() >= 0);

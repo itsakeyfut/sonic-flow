@@ -66,7 +66,7 @@ async fn run_application() -> Result<()> {
 
 /// Find a demo audio file for testing
 fn find_demo_audio_file() -> Option<PathBuf> {
-    let possible_paths= vec![
+    let possible_paths = vec![
         // Common demo file locations
         PathBuf::from("assets/demo.mp3"),
         PathBuf::from("assets/demo.flac"),
@@ -74,14 +74,20 @@ fn find_demo_audio_file() -> Option<PathBuf> {
         PathBuf::from("demo.mp3"),
         PathBuf::from("demo.flac"),
         PathBuf::from("demo.wav"),
-
         // User's music directory
-        dirs::audio_dir().map(|dir| dir.join("demo.mp3")).unwrap_or_default(),
-        dirs::audio_dir().map(|dir| dir.join("demo.flac")).unwrap_or_default(),
-
+        dirs::audio_dir()
+            .map(|dir| dir.join("demo.mp3"))
+            .unwrap_or_default(),
+        dirs::audio_dir()
+            .map(|dir| dir.join("demo.flac"))
+            .unwrap_or_default(),
         // Home directory
-        dirs::home_dir().map(|dir| dir.join("Music").join("demo.mp3")).unwrap_or_default(),
-        dirs::home_dir().map(|dir| dir.join("Music").join("demo.flac")).unwrap_or_default(),
+        dirs::home_dir()
+            .map(|dir| dir.join("Music").join("demo.mp3"))
+            .unwrap_or_default(),
+        dirs::home_dir()
+            .map(|dir| dir.join("Music").join("demo.flac"))
+            .unwrap_or_default(),
     ];
 
     for path in &possible_paths {
@@ -89,7 +95,10 @@ fn find_demo_audio_file() -> Option<PathBuf> {
             // Verify it's an audio file by extension
             if let Some(ext) = path.extension() {
                 let ext_str = ext.to_string_lossy().to_lowercase();
-                if matches!(ext_str.as_str(), "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac") {
+                if matches!(
+                    ext_str.as_str(),
+                    "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac"
+                ) {
                     return Some(path.clone());
                 }
             }
@@ -143,7 +152,9 @@ fn init_logging() -> Result<()> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         // Enhanced logging configuration for visualizer development
         #[cfg(debug_assertions)]
-        return EnvFilter::new("sonic_flow=debug,sonic_flow::visualizer=trace,sonic_flow::audio=debug,warn");
+        return EnvFilter::new(
+            "sonic_flow=debug,sonic_flow::visualizer=trace,sonic_flow::audio=debug,warn",
+        );
 
         #[cfg(not(debug_assertions))]
         return EnvFilter::new("sonic_flow=info,sonic_flow::visualizer=debug,warn");
@@ -155,7 +166,7 @@ fn init_logging() -> Result<()> {
             .with_thread_ids(true)
             .with_line_number(true)
             .with_file(cfg!(debug_assertions))
-            .with_ansi(true) // Enable colors for better readability
+            .with_ansi(true), // Enable colors for better readability
     );
 
     // Add file logging in release mode
@@ -203,9 +214,9 @@ fn init_logging() -> Result<()> {
 #[allow(dead_code)]
 fn generate_demo_audio() -> Result<PathBuf> {
     let output_path = PathBuf::from("generated_demo.wav");
-    
+
     info!("Generating demo audio file: {}", output_path.display());
-    
+
     // Create a simple WAV file with a sine wave
     let spec = hound::WavSpec {
         channels: 2,
@@ -224,30 +235,32 @@ fn generate_demo_audio() -> Result<PathBuf> {
 
     for i in 0..samples {
         let t = i as f32 / sample_rate;
-        
+
         // Mix multiple frequencies for a richer spectrum
-        let sample = 
-            0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
+        let sample = 0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
             0.2 * (2.0 * std::f32::consts::PI * 880.0 * t).sin() +  // A5
             0.1 * (2.0 * std::f32::consts::PI * 220.0 * t).sin() +  // A3
             0.1 * (2.0 * std::f32::consts::PI * 1760.0 * t).sin() + // A6
-            0.05 * (2.0 * std::f32::consts::PI * 110.0 * t).sin();  // A2
+            0.05 * (2.0 * std::f32::consts::PI * 110.0 * t).sin(); // A2
 
         // Add some variation over time
         let envelope = (t * 0.5).sin() * 0.3 + 0.7;
         let final_sample = sample * envelope;
-        
+
         // Convert to 16-bit integer
         let amplitude = (final_sample * i16::MAX as f32) as i16;
-        
+
         // Write stereo samples
-        writer.write_sample(amplitude)
-            .map_err(|e| sonic_flow::Error::Application(format!("Failed to write sample: {}", e)))?;
-        writer.write_sample(amplitude)
-            .map_err(|e| sonic_flow::Error::Application(format!("Failed to write sample: {}", e)))?;
+        writer.write_sample(amplitude).map_err(|e| {
+            sonic_flow::Error::Application(format!("Failed to write sample: {}", e))
+        })?;
+        writer.write_sample(amplitude).map_err(|e| {
+            sonic_flow::Error::Application(format!("Failed to write sample: {}", e))
+        })?;
     }
 
-    writer.finalize()
+    writer
+        .finalize()
         .map_err(|e| sonic_flow::Error::Application(format!("Failed to finalize WAV: {}", e)))?;
 
     info!("Demo audio file generated successfully");

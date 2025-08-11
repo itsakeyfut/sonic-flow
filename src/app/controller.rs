@@ -217,7 +217,10 @@ impl AppController {
 
             // Process spectrum data and send to visualizer
             while let Ok(spectrum_data) = spectrum_receiver.recv().await {
-                debug!("Received spectrum data with {} bands", spectrum_data.bands.len());
+                debug!(
+                    "Received spectrum data with {} bands",
+                    spectrum_data.bands.len()
+                );
 
                 // Update visualizer with spectrum data
                 if let Err(e) = visualizer_system.update(spectrum_data) {
@@ -420,7 +423,10 @@ impl AppController {
                         window
                             .set_visualizer_type(current_state.ui.active_visualizer.clone().into());
 
-                        debug!("UI updated - Playing: {}, Volume: {:.2}", is_playing, current_state.playback.volume);
+                        debug!(
+                            "UI updated - Playing: {}, Volume: {:.2}",
+                            is_playing, current_state.playback.volume
+                        );
                     }
 
                     last_state = current_state;
@@ -487,7 +493,10 @@ impl AppController {
         let track_id = engine.load_track(path).await.map_err(Error::Audio)?;
 
         // Set as current track
-        engine.set_current_track(track_id).await.map_err(Error::Audio)?;
+        engine
+            .set_current_track(track_id)
+            .await
+            .map_err(Error::Audio)?;
 
         info!("Test track loaded successfully: {}", track_id);
         Ok(())
