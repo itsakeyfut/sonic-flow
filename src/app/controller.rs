@@ -1,7 +1,7 @@
 //! Main application controller
 
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::audio::traits::{
     PlaybackControl, PlaybackState, PlaybackStatus, TrackLoader, VolumeControl,
@@ -98,6 +98,7 @@ impl AppController {
         let audio_task = self.start_audio_monitoring_task();
         let event_task = self.start_event_processing_task();
         let ui_update_task = self.start_ui_update_task();
+        let spectrum_task = self.start_spectrum_analysis_task();
 
         // Show the main window
         self.ui_system.main_window().show()?;
@@ -116,6 +117,10 @@ impl AppController {
             result = ui_update_task => {
                 error!("UI update task ended unexpectedly: {:?}", result);
                 Err(Error::Application("UI update task ended".to_string()))
+            }
+            result = spectrum_task => {
+                error!("Spectrum task ended unexpectedly: {:?}", result);
+                Err(Error::Application("Spectrum task ended".to_string()))
             }
             // Run UI in current thread
             ui_result = async {
@@ -146,10 +151,9 @@ impl AppController {
         let audio_engine = Arc::clone(&self.audio_engine);
         let state_manager = Arc::clone(&self.state_manager);
         let event_bus = Arc::clone(&self.event_bus);
-        let visualizer_system = Arc::clone(&self.visualizer_system);
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(16)); // 60FPS
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100)); // 10Hz for status updates
 
             loop {
                 interval.tick().await;
@@ -161,21 +165,6 @@ impl AppController {
                 let current_volume = audio_engine.volume();
                 let is_muted = audio_engine.is_muted();
                 let current_track = audio_engine.current_track();
-
-                // TODO: 音声エンジンからスペクトラムデータを取得
-                // 実際の実装では AudioEngine にスペクトラムデータ取得メソッドを追加する必要があります
-                if current_state == PlaybackState::Playing {
-                    // ダミーのスペクトラムデータ（実装時は実際のFFTデータを使用）
-                    let dummy_spectrum = crate::audio::analysis::SpectrumData::new(
-                        (0..64).map(|i| (i as f32 / 64.0) * 0.5).collect(),
-                        0.5,
-                        0.3,
-                    );
-
-                    if let Err(e) = visualizer_system.update(dummy_spectrum) {
-                        tracing::error!("Failed to update visualizer: {}", e);
-                    }
-                }
 
                 drop(audio_engine);
 
@@ -194,18 +183,10 @@ impl AppController {
                     // Publish events for state changes
                     if old_playing != playback.is_playing {
                         if playback.is_playing {
-                            if let Err(e) = visualizer_system.start() {
-                                tracing::error!("Failed to start visualizer: {}", e);
-                            }
-
                             if let Some(track_id) = current_track {
                                 let _ = event_bus.publish(AppEvent::PlaybackStarted(track_id));
                             }
                         } else {
-                            if let Err(e) = visualizer_system.stop() {
-                                tracing::error!("Failed to stop visualizer: {}", e);
-                            }
-
                             let _ = event_bus.publish(AppEvent::PlaybackPaused);
                         }
                     }
@@ -217,6 +198,37 @@ impl AppController {
                     // Could implement error recovery here
                 }
             }
+        })
+    }
+
+    /// Start the spectrum analysis background task
+    fn start_spectrum_analysis_task(&self) -> tokio::task::JoinHandle<Result<()>> {
+        let audio_engine = Arc::clone(&self.audio_engine);
+        let visualizer_system = Arc::clone(&self.visualizer_system);
+
+        tokio::spawn(async move {
+            // Subscribe to spectrum data from audio engine
+            let mut spectrum_receiver = {
+                let engine = audio_engine.read().await;
+                engine.subscribe_spectrum()
+            };
+
+            info!("Spectrum analysis task started");
+
+            // Process spectrum data and send to visualizer
+            while let Ok(spectrum_data) = spectrum_receiver.recv().await {
+                debug!("Received spectrum data with {} bands", spectrum_data.bands.len());
+
+                // Update visualizer with spectrum data
+                if let Err(e) = visualizer_system.update(spectrum_data) {
+                    error!("Failed to update visualizer with spectrum data: {}", e);
+                } else {
+                    debug!("Successfully updated visualizer with spectrum data");
+                }
+            }
+
+            warn!("Spectrum receiver channel closed");
+            Ok(())
         })
     }
 
@@ -242,6 +254,10 @@ impl AppController {
                                     error!("Failed to pause playback: {}", e);
                                 } else {
                                     info!("Playback paused");
+                                    // Stop visualizer when pausing
+                                    if let Err(e) = visualizer_system.stop() {
+                                        error!("Failed to stop visualizer: {}", e);
+                                    }
                                 }
                             }
                             PlaybackState::Paused | PlaybackState::Stopped => {
@@ -249,6 +265,10 @@ impl AppController {
                                     error!("Failed to start playback: {}", e);
                                 } else {
                                     info!("Playback started");
+                                    // Stop visualizer when pausing
+                                    if let Err(e) = visualizer_system.stop() {
+                                        error!("Failed to stop visualizer: {}", e);
+                                    }
                                 }
                             }
                             _ => {
@@ -266,6 +286,10 @@ impl AppController {
                             error!("Failed to stop playback: {}", e);
                         } else {
                             info!("Playback stopped");
+                            // Stop visualizer
+                            if let Err(e) = visualizer_system.stop() {
+                                error!("Failed to stop visualizer: {}", e);
+                            }
                         }
                     }
 
@@ -395,6 +419,8 @@ impl AppController {
                         // Update visualizer type - fix field name
                         window
                             .set_visualizer_type(current_state.ui.active_visualizer.clone().into());
+
+                        debug!("UI updated - Playing: {}, Volume: {:.2}", is_playing, current_state.playback.volume);
                     }
 
                     last_state = current_state;
@@ -408,7 +434,7 @@ impl AppController {
         old.playback.is_playing != new.playback.is_playing
             || (old.playback.volume - new.playback.volume).abs() > 0.01
             || (old.playback.position - new.playback.position).abs() > 0.5
-            || old.ui.active_visualizer != new.ui.active_visualizer // Fix field name
+            || old.ui.active_visualizer != new.ui.active_visualizer
     }
 
     /// Format duration from seconds
@@ -422,6 +448,11 @@ impl AppController {
     /// Shutdown the application controller
     async fn shutdown(&self) -> Result<()> {
         info!("Shutting down Sonic Flow application controller");
+
+        // Stop visualizer
+        if let Err(e) = self.visualizer_system.stop() {
+            error!("Failed to stop visualizer during shutdown: {}", e);
+        }
 
         // Create a lifecycle manager for shutdown
         let lifecycle_manager = LifecycleManager::new();
@@ -444,6 +475,22 @@ impl AppController {
     /// Get visualizer canvas size
     pub fn get_visualizer_size(&self) -> (u32, u32) {
         self.visualizer_system.size()
+    }
+
+    /// Load and play a test track for demonstration
+    pub async fn load_test_track(&self, path: &std::path::Path) -> Result<()> {
+        info!("Loading test track: {}", path.display());
+
+        let mut engine = self.audio_engine.write().await;
+
+        // Load the track
+        let track_id = engine.load_track(path).await.map_err(Error::Audio)?;
+
+        // Set as current track
+        engine.set_current_track(track_id).await.map_err(Error::Audio)?;
+
+        info!("Test track loaded successfully: {}", track_id);
+        Ok(())
     }
 }
 
