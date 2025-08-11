@@ -422,6 +422,16 @@ impl UiStateUpdater {
             debug!("Visualizer state: active={}, fps={:.1}", is_active, fps);
         });
     }
+
+    /// Update spectrum data visualization
+    pub fn update_spectrum_visualization(&self, spectrum_bands: &[f32]) {
+        self.update_ui(|_window| {
+            // TODO: This would update the actual visualizer display
+            // For now, we just log the peak level
+            let peak = spectrum_bands.iter().fold(0.0f32, |acc, &x| acc.max(x));
+            debug!("Spectrum peak: {:.3}", peak);
+        });
+    }
 }
 
 #[cfg(test)]
