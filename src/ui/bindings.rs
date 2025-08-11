@@ -3,6 +3,7 @@
 //! Connects Slint UI components with Rust business logic.
 
 use slint::{ComponentHandle, Weak};
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -345,6 +346,27 @@ impl MainWindowBinding {
     /// Get a reference to the main window handle
     pub fn window(&self) -> &MainWindow {
         &self.window
+    }
+
+    /// Update all UI state from an audio engine status
+    pub fn update_from_audio_status(&self, status: &AudioEngineStatus) {
+        // Update playback state
+        let (is_playing, is_paused, state_text): (bool, bool, Cow<'static, str>) = match status.state {
+            PlaybackState::Playing   => (true,  false, Cow::Borrowed("Playing")),
+            PlaybackState::Paused    => (false, true,  Cow::Borrowed("Paused")),
+            PlaybackState::Stopped   => (false, false, Cow::Borrowed("Stopped")),
+            PlaybackState::Buffering => (false, false, Cow::Borrowed("Buffering")),
+            PlaybackState::Error(ref e) => (false, false, Cow::Owned(format!("Error: {}", e))),
+        };
+
+        self.update_playback_state(is_playing, is_paused, &state_text);
+        self.update_volume(status.volume);
+        
+        if let Some(duration) = status.duration {
+            self.update_progress(status.position, duration);
+        }
+        
+        debug!("Updated UI from audio status: {:?}", status.state);
     }
 }
 
