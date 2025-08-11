@@ -315,6 +315,7 @@ impl MainWindowBinding {
         self.window
             .show()
             .map_err(|e| UiError::Slint(format!("Failed to show window: {}", e)))?;
+        info!("Main window shown");
         Ok(())
     }
 
@@ -323,6 +324,7 @@ impl MainWindowBinding {
         self.window
             .hide()
             .map_err(|e| UiError::Slint(format!("Failed to hide window: {}", e)))?;
+        info!("Main window hidden");
         Ok(())
     }
 
