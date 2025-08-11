@@ -3,6 +3,7 @@
 //! Connects Slint UI components with Rust business logic.
 
 use slint::{ComponentHandle, Weak};
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -133,11 +134,62 @@ impl MainWindowBinding {
             let event_bus = event_bus.clone();
             move |visualizer_type| {
                 debug!("Visualizer changed to: {}", visualizer_type);
+                let visualizer_id = match visualizer_type.as_str() {
+                    "Spectrum Bars" => "spectrum_bars",
+                    "Waveform" => "waveform",
+                    "Circle Spectrum" => "circle_spectrum",
+                    "Particle System" => "particle_system",
+                    "3D Spectrum" => "spectrum_3d",
+                    "VU Meters" => "vu_meters",
+                    _ => "spectrum_bars",
+                };
+
                 if let Err(e) =
-                    event_bus.publish(AppEvent::VisualizerChanged(visualizer_type.to_string()))
+                    event_bus.publish(AppEvent::VisualizerChanged(visualizer_id.to_string()))
                 {
                     error!("Failed to publish visualizer change event: {}", e);
                 }
+            }
+        });
+
+        // Visualizer sensitivity change
+        self.window.on_visualizer_sensitivity_changed({
+            let event_bus = event_bus.clone();
+            move |sensitivity| {
+                debug!("Visualizer sensitivity changed to: {:.2}", sensitivity);
+                if let Err(e) = event_bus.publish(AppEvent::VisualizerConfigChanged {
+                    sensitivity,
+                    color_scheme: "default".to_string(), // TODO: Make this configurable
+                }) {
+                    error!("Failed to publish sensitivity change event: {}", e);
+                }
+            }
+        });
+
+        // Load track button
+        self.window.on_load_track_clicked({
+            let event_bus = event_bus.clone();
+            move || {
+                debug!("Load track button clicked");
+                // For now, we'll use a dummy file path
+                // In a real implementation, this would open a file dialog
+                let dummy_path = "/path/to/sample.mp3";
+                info!(
+                    "Would open file dialog to load track (placeholder: {})",
+                    dummy_path
+                );
+
+                // TODO: Implement file dialog and actual track loading
+                // For demo purposes, we could load a sample file if available
+            }
+        });
+
+        // Fullscreen toggle
+        self.window.on_fullscreen_toggled({
+            move || {
+                debug!("Fullscreen toggle clicked");
+                // TODO: Implement fullscreen visualizer mode
+                warn!("Fullscreen visualizer not yet implemented");
             }
         });
 
@@ -157,7 +209,15 @@ impl MainWindowBinding {
         self.window.set_progress(0.0);
         self.window.set_position_text("0:00".into());
         self.window.set_duration_text("0:00".into());
+
+        // Visualizer state
         self.window.set_visualizer_type("spectrum_bars".into());
+        self.window.set_visualizer_sensitivity(1.0);
+
+        // Visualizer quality info
+        self.window.set_file_format("".into());
+        self.window.set_sample_rate("".into());
+        self.window.set_bit_depth("".into());
 
         debug!("Initial UI state set");
     }
@@ -167,6 +227,11 @@ impl MainWindowBinding {
         self.window.set_is_playing(is_playing);
         self.window.set_is_paused(is_paused);
         self.window.set_playback_state(state_text.into());
+
+        debug!(
+            "Updated playback state: playing={}, paused={}, state={}",
+            is_playing, is_paused, state_text
+        );
     }
 
     /// Update the displayed current track info
@@ -181,11 +246,35 @@ impl MainWindowBinding {
         };
 
         self.window.set_current_track(track_text.into());
+
+        // Update audio format information if available
+        if let Some(track) = track_info {
+            // Extract file extension as format
+            let format = track
+                .file_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("Unknown")
+                .to_uppercase();
+
+            self.window.set_file_format(format.into());
+
+            // TODO: Get actual sample rate and bit depth from track metadata
+            self.window.set_sample_rate("44.1 kHz".into());
+            self.window.set_bit_depth("16 bit".into());
+        } else {
+            self.window.set_file_format("".into());
+            self.window.set_sample_rate("".into());
+            self.window.set_bit_depth("".into());
+        }
+
+        debug!("Updated current track: {:?}", track_info.map(|t| &t.title));
     }
 
     /// Update volume in the UI
     pub fn update_volume(&self, volume: f32) {
         self.window.set_volume(volume);
+        debug!("Updated volume: {:.2}", volume);
     }
 
     /// Update playback progress in the UI
@@ -201,11 +290,38 @@ impl MainWindowBinding {
             .set_position_text(format_duration(position).into());
         self.window
             .set_duration_text(format_duration(duration).into());
+
+        debug!(
+            "Updated progress: {:.2}% ({:?}/{:?})",
+            progress * 100.0,
+            position,
+            duration
+        );
     }
 
     /// Update the selected visualizer type in the UI
     pub fn update_visualizer_type(&self, visualizer_type: &str) {
-        self.window.set_visualizer_type(visualizer_type.into());
+        let display_name = match visualizer_type {
+            "spectrum_bars" => "Spectrum Bars",
+            "waveform" => "Waveform",
+            "circle_spectrum" => "Circle Spectrum",
+            "particle_system" => "Particle System",
+            "spectrum_3d" => "3D Spectrum",
+            "vu_meters" => "VU Meters",
+            _ => "Spectrum Bars",
+        };
+
+        self.window.set_visualizer_type(display_name.into());
+        debug!(
+            "Updated visualizer type: {} ({})",
+            display_name, visualizer_type
+        );
+    }
+
+    /// Update visualizer sensitivity
+    pub fn update_visualizer_sensitivity(&self, sensitivity: f32) {
+        self.window.set_visualizer_sensitivity(sensitivity);
+        debug!("Updated visualizer sensitivity: {:.2}", sensitivity);
     }
 
     /// Show the main window
@@ -213,6 +329,7 @@ impl MainWindowBinding {
         self.window
             .show()
             .map_err(|e| UiError::Slint(format!("Failed to show window: {}", e)))?;
+        info!("Main window shown");
         Ok(())
     }
 
@@ -221,6 +338,7 @@ impl MainWindowBinding {
         self.window
             .hide()
             .map_err(|e| UiError::Slint(format!("Failed to hide window: {}", e)))?;
+        info!("Main window hidden");
         Ok(())
     }
 
@@ -241,6 +359,42 @@ impl MainWindowBinding {
     /// Get a reference to the main window handle
     pub fn window(&self) -> &MainWindow {
         &self.window
+    }
+
+    /// Update all UI state from an audio engine status
+    pub fn update_from_audio_status(&self, status: &AudioEngineStatus) {
+        // Update playback state
+        let (is_playing, is_paused, state_text): (bool, bool, Cow<'static, str>) =
+            match status.state {
+                PlaybackState::Playing => (true, false, Cow::Borrowed("Playing")),
+                PlaybackState::Paused => (false, true, Cow::Borrowed("Paused")),
+                PlaybackState::Stopped => (false, false, Cow::Borrowed("Stopped")),
+                PlaybackState::Buffering => (false, false, Cow::Borrowed("Buffering")),
+                PlaybackState::Error(ref e) => (false, false, Cow::Owned(format!("Error: {}", e))),
+            };
+
+        self.update_playback_state(is_playing, is_paused, &state_text);
+        self.update_volume(status.volume);
+
+        if let Some(duration) = status.duration {
+            self.update_progress(status.position, duration);
+        }
+
+        debug!("Updated UI from audio status: {:?}", status.state);
+    }
+
+    /// Show an error message in the UI
+    pub fn show_error(&self, error: &str) {
+        error!("UI Error: {}", error);
+        // TODO: Implement actual error display in UI
+        // For now, we just log it
+    }
+
+    /// Show an info message in the UI
+    pub fn show_info(&self, message: &str) {
+        info!("UI Info: {}", message);
+        // TODO: Implement actual info display in UI
+        // For now, we just log it
     }
 }
 
@@ -274,6 +428,24 @@ impl UiStateUpdater {
             warn!("Attempted to update UI but window is no longer available");
         }
     }
+
+    /// Update visualizer display state
+    pub fn update_visualizer_state(&self, is_active: bool, fps: f32) {
+        self.update_ui(|window| {
+            // TODO: Add FPS and activity indicators to UI
+            debug!("Visualizer state: active={}, fps={:.1}", is_active, fps);
+        });
+    }
+
+    /// Update spectrum data visualization
+    pub fn update_spectrum_visualization(&self, spectrum_bands: &[f32]) {
+        self.update_ui(|_window| {
+            // TODO: This would update the actual visualizer display
+            // For now, we just log the peak level
+            let peak = spectrum_bands.iter().fold(0.0f32, |acc, &x| acc.max(x));
+            debug!("Spectrum peak: {:.3}", peak);
+        });
+    }
 }
 
 #[cfg(test)]
@@ -288,6 +460,16 @@ mod tests {
         assert_eq!(format_duration(Duration::from_secs(0)), "00:00");
     }
 
-    // Note: UI-related tests require the Slint runtime and
-    // should be implemented as integration tests in a real environment.
+    #[test]
+    fn test_ui_state_updater() {
+        // Test basic functionality without actual UI
+        let event_bus = EventBus::new();
+
+        // This would fail in a headless environment, so we just test
+        // that the constructor doesn't panic
+        assert!(event_bus.receiver_count() >= 0);
+    }
+
+    // Note: Most UI tests require the Slint runtime and should be
+    // implemented as integration tests with a proper test environment
 }

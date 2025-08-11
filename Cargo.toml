@@ -63,6 +63,9 @@ sha2 = "0.10.9"
 # 画像処理（アルバムアート用）
 image = { version = "0.25.6", features = ["jpeg", "png"] }
 
+# デモ音声ファイル生成用
+hound = "3.5.1"
+
 [target.'cfg(windows)'.dependencies]
 # Windows特有
 winapi = { version = "0.3.9", features = ["audioclient", "mmdeviceapi", "mmsystem"] }
@@ -108,16 +111,17 @@ opt-level = 0
 [profile.bench]
 debug = true
 
+# # Visualizer benchmarks
+# [[bench]]
+# name = "visualizer_performance"
+# harness = false
+
 # [[bench]]
 # name = "fft_performance"
 # harness = false
 
 # [[bench]]
 # name = "audio_processing"
-# harness = false
-
-# [[bench]]
-# name = "visualizer_render"
 # harness = false
 
 [workspace]
