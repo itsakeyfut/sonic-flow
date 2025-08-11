@@ -38,6 +38,7 @@ component PlayerControls inherits Rectangle {
     callback previous-track();
     callback volume-changed(float);
     callback seek(float);
+    callback load-track-clicked();
     
     background: ColorTheme.surface;
     border-radius: ColorTheme.border-radius;
@@ -46,6 +47,14 @@ component PlayerControls inherits Rectangle {
     HorizontalBox {
         padding: ColorTheme.panel-padding;
         spacing: ColorTheme.spacing;
+        
+        // ファイル読み込みボタン
+        Button {
+            text: "📁";
+            width: 40px;
+            height: 40px;
+            clicked => { root.load-track-clicked(); }
+        }
         
         // 再生コントロールボタン
         HorizontalBox {
@@ -149,9 +158,13 @@ component PlayerControls inherits Rectangle {
 // ビジュアライザーキャンバス
 component VisualizerCanvas inherits Rectangle {
     in-out property <string> visualizer-type: "spectrum_bars";
+    in-out property <bool> is-playing: false;
+    in-out property <float> sensitivity: 1.0;
     
     // コールバック
     callback visualizer-changed(string);
+    callback sensitivity-changed(float);
+    callback fullscreen-toggled();
     
     background: ColorTheme.background;
     border-radius: ColorTheme.border-radius;
