@@ -515,41 +515,10 @@ component LibraryBrowser inherits Rectangle {
     }
 }
 
-// プレイリストビュー（プレースホルダー）
-component PlaylistView inherits Rectangle {
-    background: ColorTheme.surface;
-    border-radius: ColorTheme.border-radius;
-    
-    VerticalBox {
-        padding: ColorTheme.panel-padding;
-        spacing: ColorTheme.spacing;
-        
-        Text {
-            text: "Playlist / Queue";
-            color: ColorTheme.text-primary;
-            font-weight: 700;
-            font-size: 16px;
-        }
-        
-        Rectangle {
-            background: ColorTheme.surface-variant;
-            border-radius: 4px;
-            height: 200px;
-            
-            Text {
-                text: "No tracks in queue";
-                color: ColorTheme.text-secondary;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-    }
-}
-
 // メインウィンドウ
 export component MainWindow inherits Window {
     // ウィンドウプロパティ
-    title: "Sonic Flow";
+    title: "Sonic Flow - Audio Visualizer";
     width: 1200px;
     height: 800px;
     background: ColorTheme.background;
@@ -564,7 +533,13 @@ export component MainWindow inherits Window {
     in-out property <string> position-text: "0:00";
     in-out property <string> duration-text: "0:00";
     in-out property <string> visualizer-type: "spectrum_bars";
-    
+    in-out property <float> visualizer-sensitivity: 1.0;
+
+    // 音質情報
+    in-out property <string> file-format: "";
+    in-out property <string> sample-rate: "";
+    in-out property <string> bit-depth: "";
+
     // コールバック
     callback play-pause-clicked();
     callback stop-clicked();
@@ -573,6 +548,9 @@ export component MainWindow inherits Window {
     callback volume-changed(float);
     callback seek(float);
     callback visualizer-changed(string);
+    callback visualizer-sensitivity-changed(float);
+    callback load-track-clicked();
+    callback fullscreen-toggled();
     
     VerticalBox {
         padding: 16px;
@@ -585,14 +563,18 @@ export component MainWindow inherits Window {
             
             // 左パネル - ライブラリブラウザー
             LibraryBrowser {
-                width: 300px;
+                width: 250px;
             }
             
             // 中央パネル - ビジュアライザー
             VisualizerCanvas {
                 horizontal-stretch: 1;
                 visualizer-type: root.visualizer-type;
+                is-playing: root.is-playing;
+                sensitivity: root.visualizer-sensitivity;
                 visualizer-changed(type) => { root.visualizer-changed(type); }
+                sensitivity-changed(value) => { root.visualizer-sensitivity-changed(value); }
+                fullscreen-toggled => { root.fullscreen-toggled(); }
             }
             
             // 右パネル - 現在再生中の情報
@@ -600,14 +582,12 @@ export component MainWindow inherits Window {
                 width: 250px;
                 current-track: root.current-track;
                 playback-state: root.playback-state;
+                file-format: root.file-format;
+                sample-rate: root.sample-rate;
+                bit-depth: root.bit-depth;
             }
         }
-        
-        // 下部パネル - プレイリスト
-        PlaylistView {
-            height: 200px;
-        }
-        
+
         // コントロールバー
         PlayerControls {
             is-playing: root.is-playing;
@@ -623,6 +603,7 @@ export component MainWindow inherits Window {
             previous-track => { root.previous-track(); }
             volume-changed(vol) => { root.volume-changed(vol); }
             seek(pos) => { root.seek(pos); }
+            load-track-clicked => { root.load-track-clicked(); }
         }
     }
 }
