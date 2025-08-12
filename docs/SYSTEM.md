@@ -9,7 +9,8 @@
 5. [メモリ管理](#メモリ管理)
 6. [パフォーマンス最適化](#パフォーマンス最適化)
 7. [エラー処理戦略](#エラー処理戦略)
-8. [セキュリティ](#セキュリティ)
+8. [セキュリティ設計](#セキュリティ設計)
+9. [監視システム](#監視システム)
 
 ## システム概要
 
@@ -23,399 +24,176 @@ Sonic Flow は、音圧ビジュアライザーを中心とした高性能ミュ
 2. **ゼロコピー**: 不要なメモリコピーの排除
 3. **並行性**: データ競合のない並列処理
 4. **拡張性**: プラグインシステムによる機能追加
+5. **リアルタイム性**: 音声処理の低レイテンシ保証
+
+### システム品質要件
+
+```rust
+pub struct SystemRequirements {
+    pub max_audio_latency: Duration,      // 50ms
+    pub min_frame_rate: f32,              // 60fps
+    pub max_memory_usage: usize,          // 200MB
+    pub max_cpu_usage: f32,               // 10%
+    pub startup_time: Duration,           // 3s
+}
+```
 
 ## 技術スタック
 
-### コア技術
+### コア依存関係
 
 ```toml
 [dependencies]
 # UI Framework
-slint = "1.0"
+slint = "1.6"
 
 # 非同期処理
-tokio = { version = "1.0", features = ["full", "rt-multi-thread"] }
+tokio = { version = "1.35", features = ["full", "rt-multi-thread"] }
 futures = "0.3"
 
 # 音声処理
 rodio = "0.17"           # クロスプラットフォーム音声再生
 symphonia = "0.5"        # 音声デコード
 cpal = "0.15"            # 低レベル音声I/O
-rustfft = "6.0"          # FFT計算
+rustfft = "6.2"          # FFT計算
 
 # データ管理
 sqlx = { version = "0.7", features = ["sqlite", "chrono", "uuid"] }
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.7"             # 設定ファイル
+toml = "0.8"             # 設定ファイル
 
 # エラーハンドリング
-anyhow = "1.0"           # エラーチェーン
-thiserror = "1.0"        # カスタムエラー
+anyhow = "1.0"
+thiserror = "1.0"
 
-# ログ・デバッグ
-tracing = "0.1"          # 構造化ログ
-tracing-subscriber = "0.3"
-
-# ユーティリティ
-uuid = { version = "1.0", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
+# 並行処理
 crossbeam = "0.8"        # 並行データ構造
 parking_lot = "0.12"     # 高性能Mutex
-dashmap = "5.0"          # 並行HashMap
+dashmap = "5.5"          # 並行HashMap
+rayon = "1.8"            # データ並列処理
+
+# セキュリティ
+ring = "0.17"            # 暗号化
+sha2 = "0.10"            # ハッシュ関数
 ```
 
 ### プラットフォーム別依存関係
 
 ```toml
-# Windows特有
+# Windows
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winmm", "dsound", "wasapi"] }
-windows = { version = "0.48", features = ["Win32_Media_Audio"] }
+winapi = { version = "0.3", features = ["winmm", "wasapi"] }
+windows = { version = "0.52", features = ["Win32_Media_Audio"] }
 
-# macOS特有
+# macOS
 [target.'cfg(target_os = "macos")'.dependencies]
 core-audio = "0.11"
-core-foundation = "0.9"
 coreaudio-sys = "0.2"
 
-# Linux特有
+# Linux
 [target.'cfg(unix)'.dependencies]
 alsa = "0.7"
 pulse = "2.5"
-libc = "0.2"
-```
-
-### 開発・テスト用ツール
-
-```toml
-[dev-dependencies]
-criterion = "0.5"        # ベンチマーク
-proptest = "1.0"         # プロパティベーステスト
-mockall = "0.11"         # モック生成
-tempfile = "3.0"         # 一時ファイル
-wiremock = "0.5"         # HTTPモック
-
-[build-dependencies]
-slint-build = "1.0"      # Slintコンパイル
 ```
 
 ## データベース設計
 
-### スキーマ設計
+### スキーマ最適化
 
 ```sql
--- データベースバージョン管理
-CREATE TABLE schema_version (
-    version INTEGER PRIMARY KEY,
-    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+-- 高速検索用インデックス
+CREATE INDEX idx_tracks_album_order ON tracks(artist, album, track_number);
+CREATE INDEX idx_tracks_rated ON tracks(rating DESC) WHERE rating IS NOT NULL;
+CREATE INDEX idx_tracks_title_lower ON tracks(LOWER(title));
+
+-- FTS検索
+CREATE VIRTUAL TABLE tracks_fts USING fts5(
+    title, artist, album, genre,
+    content='tracks', content_rowid='rowid'
 );
 
--- トラック情報
-CREATE TABLE tracks (
-    id TEXT PRIMARY KEY,           -- UUID
-    file_path TEXT UNIQUE NOT NULL,
-    file_hash TEXT,               -- SHA-256
-
-    -- メタデータ
-    title TEXT,
-    artist TEXT,
-    album TEXT,
-    album_artist TEXT,
-    genre TEXT,
-    year INTEGER,
-    track_number INTEGER,
-    disc_number INTEGER,
-
-    -- 技術情報
-    duration_ms INTEGER NOT NULL,
-    bitrate INTEGER,
-    sample_rate INTEGER,
-    bit_depth INTEGER,
-    channels INTEGER,
-    file_size INTEGER,
-
-    -- アートワーク
-    artwork_hash TEXT,
-
-    -- 統計情報
-    play_count INTEGER DEFAULT 0,
-    skip_count INTEGER DEFAULT 0,
-    rating INTEGER CHECK(rating >= 0 AND rating <= 5),
-
-    -- タイムスタンプ
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    modified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_played DATETIME,
-
-    -- インデックス用
-    title_normalized TEXT,        -- 検索用正規化タイトル
-    artist_normalized TEXT        -- 検索用正規化アーティスト
-);
-
--- プレイリスト
-CREATE TABLE playlists (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    is_smart BOOLEAN DEFAULT FALSE,  -- スマートプレイリスト
-    smart_query TEXT,               -- スマートプレイリストクエリ
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- プレイリスト-トラック関連
-CREATE TABLE playlist_tracks (
-    id TEXT PRIMARY KEY,
-    playlist_id TEXT NOT NULL,
-    track_id TEXT NOT NULL,
-    position INTEGER NOT NULL,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-    FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
-
-    UNIQUE(playlist_id, position),
-    UNIQUE(playlist_id, track_id)
-);
-
--- アルバムアートワーク
-CREATE TABLE artworks (
-    hash TEXT PRIMARY KEY,        -- SHA-256
-    data BLOB NOT NULL,           -- 画像データ
-    mime_type TEXT NOT NULL,      -- image/jpeg, image/png
-    width INTEGER,
-    height INTEGER,
-    file_size INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 再生履歴
-CREATE TABLE play_history (
-    id TEXT PRIMARY KEY,
+-- 統計テーブル
+CREATE TABLE playback_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     track_id TEXT NOT NULL,
     played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    duration_played_ms INTEGER,  -- 実際の再生時間
-    completed BOOLEAN DEFAULT FALSE,  -- 最後まで再生したか
-
-    FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
+    duration_played INTEGER NOT NULL,
+    completion_percentage REAL NOT NULL
 );
-
--- 設定保存
-CREATE TABLE settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    type TEXT NOT NULL,          -- 'string', 'integer', 'float', 'boolean', 'json'
-    modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- インデックス定義
-CREATE INDEX idx_tracks_file_path ON tracks(file_path);
-CREATE INDEX idx_tracks_artist ON tracks(artist_normalized);
-CREATE INDEX idx_tracks_album ON tracks(album);
-CREATE INDEX idx_tracks_genre ON tracks(genre);
-CREATE INDEX idx_tracks_year ON tracks(year);
-CREATE INDEX idx_tracks_last_played ON tracks(last_played);
-CREATE INDEX idx_playlist_tracks_playlist ON playlist_tracks(playlist_id, position);
-CREATE INDEX idx_play_history_track ON play_history(track_id, played_at);
-CREATE INDEX idx_play_history_date ON play_history(played_at);
 ```
 
-### データアクセス層
+### データベース最適化
 
 ```rust
-use sqlx::{SqlitePool, Row};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-
-#[derive(Debug, Clone)]
-pub struct Database {
-    pool: SqlitePool,
+pub struct DatabaseManager {
+    pool: Arc<SqlitePool>,
+    cache: Arc<DashMap<String, CachedQuery>>,
 }
 
-impl Database {
+impl DatabaseManager {
     pub async fn new(database_url: &str) -> Result<Self, DatabaseError> {
-        let pool = SqlitePool::connect(database_url).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(10)
+            .connect(database_url).await?;
 
-        // マイグレーション実行
-        sqlx::migrate!("./migrations").run(&pool).await?;
+        // WALモード + 最適化
+        sqlx::query("PRAGMA journal_mode = WAL").execute(&pool).await?;
+        sqlx::query("PRAGMA synchronous = NORMAL").execute(&pool).await?;
+        sqlx::query("PRAGMA cache_size = -64000").execute(&pool).await?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Arc::new(pool),
+            cache: Arc::new(DashMap::new()),
+        })
     }
 
-    pub async fn insert_track(&self, track: &TrackInfo) -> Result<(), DatabaseError> {
-        sqlx::query!(
-            r#"
-            INSERT INTO tracks (
-                id, file_path, file_hash, title, artist, album,
-                duration_ms, bitrate, sample_rate, title_normalized, artist_normalized
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            "#,
-            track.id.to_string(),
-            track.file_path.to_string_lossy(),
-            track.file_hash,
-            track.title,
-            track.artist,
-            track.album,
-            track.duration.as_millis() as i64,
-            track.bitrate as i64,
-            track.sample_rate as i64,
-            track.title.as_ref().map(|s| normalize_for_search(s)),
-            track.artist.as_ref().map(|s| normalize_for_search(s)),
-        )
-        .execute(&self.pool)
-        .await?;
+    // バッチ処理による高速挿入
+    pub async fn batch_insert_tracks(&self, tracks: Vec<TrackInfo>) -> Result<(), DatabaseError> {
+        let mut tx = self.pool.begin().await?;
 
+        for chunk in tracks.chunks(100) {
+            // バルクインサート実装
+        }
+
+        tx.commit().await?;
         Ok(())
     }
-
-    pub async fn search_tracks(&self, query: &str) -> Result<Vec<TrackInfo>, DatabaseError> {
-        let normalized_query = normalize_for_search(query);
-        let search_pattern = format!("%{}%", normalized_query);
-
-        let rows = sqlx::query!(
-            r#"
-            SELECT * FROM tracks
-            WHERE title_normalized LIKE ?
-               OR artist_normalized LIKE ?
-               OR album LIKE ?
-            ORDER BY
-                CASE
-                    WHEN title_normalized LIKE ? THEN 1
-                    WHEN artist_normalized LIKE ? THEN 2
-                    ELSE 3
-                END,
-                title
-            LIMIT 100
-            "#,
-            search_pattern, search_pattern, search_pattern,
-            format!("{}%", normalized_query), format!("{}%", normalized_query)
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows.into_iter().map(|row| row.into()).collect())
-    }
-}
-
-fn normalize_for_search(text: &str) -> String {
-    // 検索用正規化: 小文字化、アクセント除去、空白正規化
-    text.to_lowercase()
-        .chars()
-        .filter(|c| !c.is_whitespace() || *c == ' ')
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 ```
 
 ## 並行処理設計
 
-### スレッドアーキテクチャ
+### スレッドプール構成
 
 ```rust
-use tokio::sync::{mpsc, broadcast, oneshot};
-use crossbeam::queue::SegQueue;
-use parking_lot::RwLock;
-use std::sync::Arc;
-
-pub struct ThreadManager {
-    // 音声処理専用スレッド
-    audio_handle: tokio::task::JoinHandle<()>,
-    audio_commands: mpsc::UnboundedSender<AudioCommand>,
-
-    // ビジュアライザー処理スレッド
-    visualizer_handle: tokio::task::JoinHandle<()>,
-    spectrum_channel: broadcast::Sender<SpectrumData>,
-
-    // ファイルI/O専用スレッド
-    io_handle: tokio::task::JoinHandle<()>,
-    io_commands: mpsc::UnboundedSender<IoCommand>,
+pub struct AudioThreadPool {
+    // 音声処理専用（高優先度）
+    audio_runtime: Runtime,
+    // ビジュアライザー処理（中優先度）
+    visual_runtime: Runtime,
+    // I/O処理（低優先度）
+    io_runtime: Runtime,
 }
 
-#[derive(Debug)]
-pub enum AudioCommand {
-    Play(TrackId),
-    Pause,
-    Stop,
-    Seek(Duration),
-    SetVolume(f32),
-    Shutdown(oneshot::Sender<()>),
-}
-
-impl ThreadManager {
-    pub async fn new() -> Result<Self, SystemError> {
-        // 音声処理スレッド
-        let (audio_tx, audio_rx) = mpsc::unbounded_channel();
-        let audio_handle = tokio::spawn(Self::audio_thread(audio_rx));
-
-        // ビジュアライザースレッド
-        let (spectrum_tx, _) = broadcast::channel(100);
-        let visualizer_handle = tokio::spawn(Self::visualizer_thread(spectrum_tx.clone()));
-
-        // ファイルI/Oスレッド
-        let (io_tx, io_rx) = mpsc::unbounded_channel();
-        let io_handle = tokio::spawn(Self::io_thread(io_rx));
-
-        Ok(Self {
-            audio_handle,
-            audio_commands: audio_tx,
-            visualizer_handle,
-            spectrum_channel: spectrum_tx,
-            io_handle,
-            io_commands: io_tx,
-        })
-    }
-
-    async fn audio_thread(mut commands: mpsc::UnboundedReceiver<AudioCommand>) {
-        let mut audio_engine = AudioEngine::new().expect("Failed to initialize audio engine");
-
-        while let Some(command) = commands.recv().await {
-            match command {
-                AudioCommand::Play(track_id) => {
-                    if let Err(e) = audio_engine.play(track_id).await {
-                        tracing::error!("Failed to play track: {:?}", e);
-                    }
+impl AudioThreadPool {
+    pub fn new() -> Result<Self, ThreadPoolError> {
+        // 音声処理用高優先度ランタイム
+        let audio_runtime = Builder::new_multi_thread()
+            .worker_threads(2)
+            .thread_name("audio-worker")
+            .on_thread_start(|| {
+                #[cfg(unix)]
+                unsafe {
+                    libc::pthread_setschedparam(
+                        libc::pthread_self(),
+                        libc::SCHED_FIFO,
+                        &libc::sched_param { sched_priority: 80 },
+                    );
                 }
-                AudioCommand::Pause => {
-                    audio_engine.pause().await;
-                }
-                AudioCommand::Stop => {
-                    audio_engine.stop().await;
-                }
-                AudioCommand::Seek(position) => {
-                    if let Err(e) = audio_engine.seek(position).await {
-                        tracing::error!("Failed to seek: {:?}", e);
-                    }
-                }
-                AudioCommand::SetVolume(volume) => {
-                    audio_engine.set_volume(volume);
-                }
-                AudioCommand::Shutdown(response) => {
-                    audio_engine.shutdown().await;
-                    let _ = response.send(());
-                    break;
-                }
-            }
-        }
-    }
+            })
+            .build()?;
 
-    async fn visualizer_thread(spectrum_sender: broadcast::Sender<SpectrumData>) {
-        // リアルタイムFFT処理とビジュアライザー更新
-        let mut analyzer = SpectrumAnalyzer::new(2048);
-        let mut interval = tokio::time::interval(Duration::from_millis(16)); // 60fps
-
-        loop {
-            interval.tick().await;
-
-            // 音声バッファからFFTデータ取得
-            if let Some(audio_data) = get_current_audio_buffer() {
-                let spectrum = analyzer.analyze(&audio_data);
-
-                // ビジュアライザーに送信（失敗は無視）
-                let _ = spectrum_sender.send(spectrum);
-            }
-        }
+        Ok(Self { audio_runtime, /* ... */ })
     }
 }
 ```
@@ -423,613 +201,352 @@ impl ThreadManager {
 ### Lock-Free データ構造
 
 ```rust
-use crossbeam::{
-    atomic::AtomicCell,
-    queue::{ArrayQueue, SegQueue},
-    channel::{bounded, unbounded, Receiver, Sender},
-};
+// Triple Buffering for Audio
+pub struct TripleBuffer<T> {
+    buffers: [AtomicCell<Option<T>>; 3],
+    write_index: AtomicUsize,
+    read_index: AtomicUsize,
+}
 
-// 音声バッファ用Ring Buffer
-pub struct AudioRingBuffer {
-    buffer: Vec<AtomicCell<f32>>,
+impl<T> TripleBuffer<T> {
+    pub fn write(&self, data: T) {
+        let write_idx = self.write_index.load(Ordering::Relaxed);
+        self.buffers[write_idx].store(Some(data));
+        self.rotate_indices();
+    }
+
+    pub fn read(&self) -> Option<T> {
+        let read_idx = self.read_index.load(Ordering::Acquire);
+        self.buffers[read_idx].take()
+    }
+}
+
+// 高性能リングバッファ
+pub struct LockFreeRingBuffer<T> {
+    buffer: Vec<AtomicCell<MaybeUninit<T>>>,
     write_pos: AtomicUsize,
     read_pos: AtomicUsize,
     capacity: usize,
-}
-
-impl AudioRingBuffer {
-    pub fn new(capacity: usize) -> Self {
-        let buffer = (0..capacity)
-            .map(|_| AtomicCell::new(0.0))
-            .collect();
-
-        Self {
-            buffer,
-            write_pos: AtomicUsize::new(0),
-            read_pos: AtomicUsize::new(0),
-            capacity,
-        }
-    }
-
-    pub fn write(&self, data: &[f32]) -> usize {
-        let mut written = 0;
-        let start_pos = self.write_pos.load(Ordering::Acquire);
-
-        for &sample in data {
-            let pos = (start_pos + written) % self.capacity;
-            self.buffer[pos].store(sample);
-            written += 1;
-
-            // バッファフル検出
-            if written >= self.available_write_space() {
-                break;
-            }
-        }
-
-        self.write_pos.store(
-            (start_pos + written) % self.capacity,
-            Ordering::Release,
-        );
-
-        written
-    }
-
-    pub fn read(&self, output: &mut [f32]) -> usize {
-        let mut read = 0;
-        let start_pos = self.read_pos.load(Ordering::Acquire);
-
-        for sample in output.iter_mut() {
-            if read >= self.available_read_space() {
-                break;
-            }
-
-            let pos = (start_pos + read) % self.capacity;
-            *sample = self.buffer[pos].load();
-            read += 1;
-        }
-
-        self.read_pos.store(
-            (start_pos + read) % self.capacity,
-            Ordering::Release,
-        );
-
-        read
-    }
-
-    fn available_write_space(&self) -> usize {
-        let write_pos = self.write_pos.load(Ordering::Relaxed);
-        let read_pos = self.read_pos.load(Ordering::Relaxed);
-
-        if write_pos >= read_pos {
-            self.capacity - (write_pos - read_pos) - 1
-        } else {
-            read_pos - write_pos - 1
-        }
-    }
-
-    fn available_read_space(&self) -> usize {
-        let write_pos = self.write_pos.load(Ordering::Relaxed);
-        let read_pos = self.read_pos.load(Ordering::Relaxed);
-
-        if write_pos >= read_pos {
-            write_pos - read_pos
-        } else {
-            self.capacity - (read_pos - write_pos)
-        }
-    }
 }
 ```
 
 ## メモリ管理
 
-### Zero-Copy 設計
+### メモリプール
 
 ```rust
-use std::sync::Arc;
-use std::ops::Range;
-
-// ゼロコピーバッファ
-#[derive(Debug, Clone)]
-pub struct ZeroCopyBuffer<T> {
-    data: Arc<Vec<T>>,
-    range: Range<usize>,
+pub struct AudioMemoryPool {
+    small_blocks: SegQueue<Vec<f32>>,    // 1KB
+    medium_blocks: SegQueue<Vec<f32>>,   // 4KB
+    large_blocks: SegQueue<Vec<f32>>,    // 16KB
 }
 
-impl<T> ZeroCopyBuffer<T> {
-    pub fn new(data: Vec<T>) -> Self {
-        let len = data.len();
-        Self {
-            data: Arc::new(data),
-            range: 0..len,
-        }
-    }
+impl AudioMemoryPool {
+    pub fn allocate(&self, size: usize) -> PooledBuffer {
+        let buffer = match size {
+            0..=256 => self.small_blocks.pop().unwrap_or_else(|| vec![0.0f32; 256]),
+            257..=1024 => self.medium_blocks.pop().unwrap_or_else(|| vec![0.0f32; 1024]),
+            _ => self.large_blocks.pop().unwrap_or_else(|| vec![0.0f32; 4096]),
+        };
 
-    pub fn slice(&self, range: Range<usize>) -> Self {
-        let start = self.range.start + range.start;
-        let end = self.range.start + range.end.min(self.range.len());
-
-        Self {
-            data: Arc::clone(&self.data),
-            range: start..end,
-        }
-    }
-
-    pub fn as_slice(&self) -> &[T] {
-        &self.data[self.range.clone()]
+        PooledBuffer::new(buffer, self)
     }
 }
 
-// メモリプール
-pub struct BufferPool<T> {
-    free_buffers: SegQueue<Vec<T>>,
-    buffer_size: usize,
+// RAII メモリ管理
+pub struct PooledBuffer {
+    buffer: Option<Vec<f32>>,
+    pool: *const AudioMemoryPool,
 }
 
-impl<T: Default + Clone> BufferPool<T> {
-    pub fn new(pool_size: usize, buffer_size: usize) -> Self {
-        let free_buffers = SegQueue::new();
-
-        for _ in 0..pool_size {
-            free_buffers.push(vec![T::default(); buffer_size]);
+impl Drop for PooledBuffer {
+    fn drop(&mut self) {
+        if let Some(buffer) = self.buffer.take() {
+            unsafe { (*self.pool).return_buffer(buffer); }
         }
-
-        Self {
-            free_buffers,
-            buffer_size,
-        }
-    }
-
-    pub fn get(&self) -> Vec<T> {
-        self.free_buffers
-            .pop()
-            .unwrap_or_else(|| vec![T::default(); self.buffer_size])
-    }
-
-    pub fn return_buffer(&self, mut buffer: Vec<T>) {
-        buffer.clear();
-        buffer.resize(self.buffer_size, T::default());
-        self.free_buffers.push(buffer);
     }
 }
 ```
 
-### RAII リソース管理
+### Zero-Copy バッファ
 
 ```rust
-// 音声リソースの自動管理
-pub struct AudioResource {
-    handle: Option<AudioHandle>,
-    _phantom: std::marker::PhantomData<*const ()>,
+#[derive(Clone)]
+pub struct SharedAudioBuffer {
+    data: Arc<[f32]>,
+    offset: usize,
+    length: usize,
+    sample_rate: u32,
+    channels: u8,
 }
 
-impl AudioResource {
-    pub fn new(handle: AudioHandle) -> Self {
+impl SharedAudioBuffer {
+    pub fn slice(&self, start: usize, end: usize) -> Self {
         Self {
-            handle: Some(handle),
-            _phantom: std::marker::PhantomData,
+            data: Arc::clone(&self.data),
+            offset: self.offset + start,
+            length: end - start,
+            sample_rate: self.sample_rate,
+            channels: self.channels,
         }
     }
-
-    pub fn handle(&self) -> &AudioHandle {
-        self.handle.as_ref().expect("Resource already consumed")
-    }
-}
-
-impl Drop for AudioResource {
-    fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            // 確実なクリーンアップ
-            handle.stop();
-            handle.release_resources();
-        }
-    }
-}
-
-// スコープガード
-pub struct ScopeGuard<F: FnOnce()> {
-    cleanup: Option<F>,
-}
-
-impl<F: FnOnce()> ScopeGuard<F> {
-    pub fn new(cleanup: F) -> Self {
-        Self {
-            cleanup: Some(cleanup),
-        }
-    }
-}
-
-impl<F: FnOnce()> Drop for ScopeGuard<F> {
-    fn drop(&mut self) {
-        if let Some(cleanup) = self.cleanup.take() {
-            cleanup();
-        }
-    }
-}
-
-// 使用例
-fn process_audio_file(path: &Path) -> Result<(), AudioError> {
-    let file = File::open(path)?;
-    let _guard = ScopeGuard::new(|| {
-        // ファイルクリーンアップ処理
-        cleanup_temp_files();
-    });
-
-    // ファイル処理...
-    Ok(())
 }
 ```
 
 ## パフォーマンス最適化
 
-### CPU 最適化
+### SIMD 最適化
 
 ```rust
-// SIMD処理によるFFT高速化
-use std::arch::x86_64::*;
-
-#[target_feature(enable = "avx2")]
-unsafe fn simd_multiply_add(a: &[f32], b: &[f32], c: &mut [f32]) {
-    assert_eq!(a.len(), b.len());
-    assert_eq!(a.len(), c.len());
-    assert_eq!(a.len() % 8, 0);
-
-    for i in (0..a.len()).step_by(8) {
-        let va = _mm256_loadu_ps(a.as_ptr().add(i));
-        let vb = _mm256_loadu_ps(b.as_ptr().add(i));
-        let vc = _mm256_loadu_ps(c.as_ptr().add(i));
-
-        let result = _mm256_fmadd_ps(va, vb, vc);
-        _mm256_storeu_ps(c.as_mut_ptr().add(i), result);
-    }
+pub struct SIMDAudioProcessor {
+    #[cfg(target_arch = "x86_64")]
+    supports_avx2: bool,
 }
 
-// 分岐予測最適化
-#[inline(always)]
-pub fn likely(condition: bool) -> bool {
-    #[cold]
-    fn cold() {}
+impl SIMDAudioProcessor {
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    unsafe fn mix_channels_avx2(&self, left: &mut [f32], right: &[f32], volume: f32) {
+        use std::arch::x86_64::*;
 
-    if !condition {
-        cold();
+        let volume_vec = _mm256_set1_ps(volume);
+
+        for chunk in left.chunks_exact_mut(8).zip(right.chunks_exact(8)) {
+            let left_vec = _mm256_loadu_ps(chunk.0.as_ptr());
+            let right_vec = _mm256_loadu_ps(chunk.1.as_ptr());
+            let mixed = _mm256_fmadd_ps(right_vec, volume_vec, left_vec);
+            _mm256_storeu_ps(chunk.0.as_mut_ptr(), mixed);
+        }
     }
-    condition
-}
-
-#[inline(always)]
-pub fn unlikely(condition: bool) -> bool {
-    #[cold]
-    fn cold() {}
-
-    if condition {
-        cold();
-    }
-    condition
 }
 ```
 
-### メモリ最適化
+### キャッシュ最適化
 
 ```rust
-// キャッシュ効率の良いデータレイアウト
-#[repr(C)]
-pub struct PackedAudioFrame {
-    pub left: f32,
-    pub right: f32,
-    pub timestamp: u64,
-} // 64-bit境界でアライン
+#[repr(align(64))] // キャッシュライン境界
+pub struct CacheOptimizedSpectrumData {
+    pub magnitudes: Vec<f32>,      // ホットデータ
+    pub timestamp: Instant,
 
-// プリフェッチ
-use std::intrinsics::prefetch_read_data;
-
-pub fn optimized_process(data: &[f32]) {
-    const PREFETCH_DISTANCE: usize = 64;
-
-    for (i, chunk) in data.chunks(32).enumerate() {
-        // 次のデータをプリフェッチ
-        if i * 32 + PREFETCH_DISTANCE < data.len() {
-            unsafe {
-                prefetch_read_data(
-                    data.as_ptr().add(i * 32 + PREFETCH_DISTANCE),
-                    1, // 低局所性
-                );
-            }
-        }
-
-        // 実際の処理
-        process_chunk(chunk);
-    }
+    _padding: [u8; 32],            // false sharing防止
+    pub frequencies: Vec<f32>,      // コールドデータ
+    pub metadata: SpectrumMetadata,
 }
 ```
 
 ## エラー処理戦略
 
-### エラー階層
+### 階層化エラー処理
 
 ```rust
-use thiserror::Error;
-
-// アプリケーションレベルエラー
 #[derive(Error, Debug)]
-pub enum ApplicationError {
-    #[error("Audio engine error: {0}")]
+pub enum SonicFlowError {
+    #[error("Critical system error: {0}")]
+    Critical(#[from] CriticalError),
+
+    #[error("Recoverable error: {message} (attempt {attempt}/{max_attempts})")]
+    Recoverable {
+        message: String,
+        attempt: u32,
+        max_attempts: u32,
+        #[source] source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("Audio error: {0}")]
     Audio(#[from] AudioError),
-
-    #[error("Database error: {0}")]
-    Database(#[from] DatabaseError),
-
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Configuration error: {0}")]
-    Config(#[from] ConfigError),
-
-    #[error("Plugin error: {plugin} - {message}")]
-    Plugin { plugin: String, message: String },
-}
-
-// 音声エラー
-#[derive(Error, Debug)]
-pub enum AudioError {
-    #[error("Decoder error: {0}")]
-    Decoder(#[from] DecoderError),
-
-    #[error("Device error: {0}")]
-    Device(String),
-
-    #[error("Format not supported: {format}")]
-    UnsupportedFormat { format: String },
-
-    #[error("Buffer underrun")]
-    BufferUnderrun,
-
-    #[error("Invalid state transition: {from} -> {to}")]
-    InvalidState { from: String, to: String },
-}
-
-// エラー回復戦略
-pub trait ErrorRecovery {
-    type Error;
-
-    fn can_recover(&self, error: &Self::Error) -> bool;
-    fn recover(&mut self, error: Self::Error) -> Result<(), Self::Error>;
-}
-
-impl ErrorRecovery for AudioEngine {
-    type Error = AudioError;
-
-    fn can_recover(&self, error: &AudioError) -> bool {
-        match error {
-            AudioError::BufferUnderrun => true,
-            AudioError::Device(_) => true,
-            AudioError::UnsupportedFormat { .. } => false,
-            _ => false,
-        }
-    }
-
-    fn recover(&mut self, error: AudioError) -> Result<(), AudioError> {
-        match error {
-            AudioError::BufferUnderrun => {
-                self.reset_buffers()?;
-                Ok(())
-            }
-            AudioError::Device(_) => {
-                self.reinitialize_device()?;
-                Ok(())
-            }
-            _ => Err(error),
-        }
-    }
 }
 ```
 
-### 障害対応
+### サーキットブレーカー
 
 ```rust
-// サーキットブレーカーパターン
-#[derive(Debug)]
-pub struct CircuitBreaker<F, E> {
+pub struct CircuitBreaker {
+    state: Arc<Mutex<CircuitState>>,
     failure_threshold: usize,
-    recovery_timeout: Duration,
     failure_count: AtomicUsize,
-    last_failure: AtomicCell<Option<Instant>>,
-    state: AtomicCell<CircuitState>,
-    _phantom: std::marker::PhantomData<(F, E)>,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum CircuitState {
-    Closed,   // 正常状態
-    Open,     // 障害状態
-    HalfOpen, // 回復試行状態
-}
-
-impl<F, E> CircuitBreaker<F, E>
-where
-    F: Fn() -> Result<(), E>,
-    E: std::fmt::Debug,
-{
-    pub fn new(failure_threshold: usize, recovery_timeout: Duration) -> Self {
-        Self {
-            failure_threshold,
-            recovery_timeout,
-            failure_count: AtomicUsize::new(0),
-            last_failure: AtomicCell::new(None),
-            state: AtomicCell::new(CircuitState::Closed),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    pub fn execute(&self, f: F) -> Result<(), CircuitBreakerError<E>> {
-        match self.state.load() {
-            CircuitState::Open => {
-                if self.should_attempt_recovery() {
-                    self.state.store(CircuitState::HalfOpen);
-                } else {
-                    return Err(CircuitBreakerError::CircuitOpen);
+impl CircuitBreaker {
+    pub async fn execute<F, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError<E>>
+    where F: Future<Output = Result<T, E>>
+    {
+        match self.current_state().await {
+            CircuitState::Open => Err(CircuitBreakerError::CircuitOpen),
+            _ => {
+                match operation.await {
+                    Ok(result) => {
+                        self.on_success().await;
+                        Ok(result)
+                    }
+                    Err(error) => {
+                        self.on_failure().await;
+                        Err(CircuitBreakerError::OperationFailed(error))
+                    }
                 }
             }
-            CircuitState::Closed | CircuitState::HalfOpen => {}
-        }
-
-        match f() {
-            Ok(()) => {
-                self.on_success();
-                Ok(())
-            }
-            Err(e) => {
-                self.on_failure();
-                Err(CircuitBreakerError::Execution(e))
-            }
-        }
-    }
-
-    fn should_attempt_recovery(&self) -> bool {
-        if let Some(last_failure) = self.last_failure.load() {
-            last_failure.elapsed() >= self.recovery_timeout
-        } else {
-            true
-        }
-    }
-
-    fn on_success(&self) {
-        self.failure_count.store(0, Ordering::Relaxed);
-        self.state.store(CircuitState::Closed);
-    }
-
-    fn on_failure(&self) {
-        self.last_failure.store(Some(Instant::now()));
-        let failures = self.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
-
-        if failures >= self.failure_threshold {
-            self.state.store(CircuitState::Open);
         }
     }
 }
 ```
 
-## セキュリティ
+## セキュリティ設計
 
-### ファイルシステムセキュリティ
+### プラグインサンドボックス
 
 ```rust
-use std::path::{Path, PathBuf};
-
-pub struct SecurePathValidator {
-    allowed_extensions: HashSet<&'static str>,
-    max_file_size: u64,
-    allowed_directories: Vec<PathBuf>,
+pub struct PluginSandbox {
+    security_policy: SecurityPolicy,
+    memory_limiter: MemoryLimiter,
+    cpu_limiter: CpuTimeLimiter,
+    file_access_controller: FileAccessController,
 }
 
-impl SecurePathValidator {
-    pub fn new() -> Self {
-        Self {
-            allowed_extensions: ["mp3", "flac", "wav", "ogg", "m4a"]
-                .iter().copied().collect(),
-            max_file_size: 500 * 1024 * 1024, // 500MB
-            allowed_directories: vec![
-                dirs::home_dir().unwrap_or_default().join("Music"),
-            ],
-        }
+impl PluginSandbox {
+    pub async fn execute_plugin<T>(
+        &mut self,
+        plugin: &mut dyn VisualizerPlugin,
+        input: T,
+    ) -> Result<T::Output, SecurityError> {
+        // 1. プラグイン署名検証
+        self.verify_plugin_signature(plugin)?;
+
+        // 2. リソース制限設定
+        let _guards = (
+            self.memory_limiter.create_guard()?,
+            self.cpu_limiter.create_guard()?,
+            self.file_access_controller.create_guard()?,
+        );
+
+        // 3. 隔離された実行
+        let result = tokio::task::spawn_blocking(move || {
+            plugin.execute(input)
+        }).await??;
+
+        Ok(result)
     }
+}
+```
 
-    pub fn validate_audio_file(&self, path: &Path) -> Result<(), SecurityError> {
-        // パストラバーサル攻撃防止
-        let canonical = path.canonicalize()
-            .map_err(|_| SecurityError::InvalidPath)?;
+### 暗号化とハッシュ
 
-        // ディレクトリ制限チェック
-        let allowed = self.allowed_directories.iter().any(|allowed_dir| {
-            canonical.starts_with(allowed_dir)
-        });
+```rust
+pub struct SecurityManager {
+    rng: SystemRandom,
+    signing_key: Vec<u8>,
+}
 
-        if !allowed {
-            return Err(SecurityError::UnauthorizedDirectory);
-        }
+impl SecurityManager {
+    pub fn verify_plugin_signature(&self, plugin_path: &Path) -> Result<(), SecurityError> {
+        use ring::signature;
 
-        // 拡張子チェック
-        if let Some(extension) = canonical.extension().and_then(|s| s.to_str()) {
-            if !self.allowed_extensions.contains(extension.to_lowercase().as_str()) {
-                return Err(SecurityError::UnsupportedFileType);
-            }
-        } else {
-            return Err(SecurityError::NoFileExtension);
-        }
+        let public_key = signature::UnparsedPublicKey::new(
+            &signature::RSA_PKCS1_2048_8192_SHA256,
+            &self.signing_key
+        );
 
-        // ファイルサイズチェック
-        let metadata = std::fs::metadata(&canonical)?;
-        if metadata.len() > self.max_file_size {
-            return Err(SecurityError::FileTooLarge);
-        }
+        let plugin_hash = self.calculate_file_hash(plugin_path)?;
+        let signature = self.read_signature(plugin_path)?;
+
+        public_key.verify(&plugin_hash, &signature)
+            .map_err(|_| SecurityError::InvalidSignature)?;
 
         Ok(())
     }
 }
+```
 
-#[derive(Error, Debug)]
-pub enum SecurityError {
-    #[error("Invalid file path")]
-    InvalidPath,
+## 監視システム
 
-    #[error("Unauthorized directory access")]
-    UnauthorizedDirectory,
+### メトリクス収集
 
-    #[error("Unsupported file type")]
-    UnsupportedFileType,
+```rust
+pub struct MetricsCollector {
+    cpu_usage: MovingAverage,
+    memory_usage: MovingAverage,
+    audio_latency: Histogram,
+    frame_render_time: Histogram,
+    error_rates: HashMap<String, Counter>,
+}
 
-    #[error("File has no extension")]
-    NoFileExtension,
+impl MetricsCollector {
+    pub async fn start_collection(&mut self, interval: Duration) {
+        let mut timer = tokio::time::interval(interval);
 
-    #[error("File too large")]
-    FileTooLarge,
+        loop {
+            timer.tick().await;
+            self.collect_system_metrics().await;
+            self.export_metrics().await;
+        }
+    }
 
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    pub fn record_audio_latency(&self, latency: Duration) {
+        self.audio_latency.record(latency.as_millis() as f64);
+    }
 }
 ```
 
-### メモリセキュリティ
+### アラートシステム
 
 ```rust
-// 機密データの安全な消去
-pub struct SecureBuffer {
-    data: Vec<u8>,
+pub struct AlertManager {
+    alert_rules: Vec<AlertRule>,
+    active_alerts: DashMap<String, ActiveAlert>,
 }
 
-impl SecureBuffer {
-    pub fn new(size: usize) -> Self {
-        Self {
-            data: vec![0u8; size],
-        }
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.data
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.data
-    }
+#[derive(Debug, Clone)]
+pub enum AlertCondition {
+    CpuUsageHigh { threshold: f64 },
+    MemoryUsageHigh { threshold: f64 },
+    AudioLatencyHigh { threshold_ms: f64 },
+    ErrorRateHigh { threshold_per_minute: f64 },
 }
 
-impl Drop for SecureBuffer {
-    fn drop(&mut self) {
-        // メモリを確実に0クリア
-        unsafe {
-            std::ptr::write_bytes(
-                self.data.as_mut_ptr(),
-                0,
-                self.data.len(),
-            );
-        }
+impl AlertManager {
+    pub async fn evaluate_metrics(&self, metrics: &MetricsSnapshot) {
+        for rule in &self.alert_rules {
+            let should_fire = rule.condition.evaluate(metrics);
 
-        // コンパイラ最適化を防ぐ
-        std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+            if should_fire && !self.active_alerts.contains_key(&rule.id) {
+                self.fire_alert(rule).await;
+            } else if !should_fire && self.active_alerts.contains_key(&rule.id) {
+                self.resolve_alert(rule).await;
+            }
+        }
+    }
+}
+```
+
+### 診断システム
+
+```rust
+pub struct DiagnosticsEngine {
+    system_profiler: SystemProfiler,
+    performance_analyzer: PerformanceAnalyzer,
+    error_analyzer: ErrorAnalyzer,
+}
+
+impl DiagnosticsEngine {
+    pub async fn run_diagnosis(&self) -> DiagnosisReport {
+        let (system_info, performance, errors) = tokio::join!(
+            self.system_profiler.collect_info(),
+            self.performance_analyzer.analyze(),
+            self.error_analyzer.analyze_recent()
+        );
+
+        DiagnosisReport {
+            timestamp: Utc::now(),
+            system_info: system_info?,
+            performance: performance?,
+            errors: errors?,
+            recommendations: self.generate_recommendations(&performance),
+        }
     }
 }
 ```
 
 ---
 
-**最終更新**: 2025-08-07  
-**バージョン**: 1.0  
-**レビュアー**: システムアーキテクト
+**最終更新**: 2025-08-12  
+**バージョン**: 2.0 (コンパクト版)  
+**管理者**:Claude (ディレクトリ構成再整理)
