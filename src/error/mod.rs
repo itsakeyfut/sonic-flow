@@ -79,6 +79,9 @@ pub enum AudioError {
     #[error("Streaming error: {0}")]
     Streaming(String),
 
+    #[error("Metadata error: {0}")]
+    Metadata(String),
+
     /// Effects processing error
     #[error("Effects processing error: {0}")]
     Effects(String),
