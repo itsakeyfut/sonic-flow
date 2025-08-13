@@ -19,9 +19,16 @@ async-trait = "0.1.88"
 
 # 音声処理
 rodio = { version = "0.19", features = ["mp3", "flac", "wav", "vorbis"] }
-symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "ogg"] }
+symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "vorbis", "aac"] }
+symphonia-bundle-mp3 = "0.5.4"
+symphonia-codec-vorbis = "0.5.4"
 cpal = "0.16.0"
 rustfft = "6.4.0"
+
+# メタデータ
+id3 = "1.16.3"
+metaflac = "0.2.8"
+hound = "3.5.1"
 
 # データ管理
 sqlx = { version = "0.8.6", features = ["chrono", "runtime-tokio-rustls", "sqlite", "uuid"] }
@@ -62,9 +69,6 @@ sha2 = "0.10.9"
 
 # 画像処理（アルバムアート用）
 image = { version = "0.25.6", features = ["jpeg", "png"] }
-
-# デモ音声ファイル生成用
-hound = "3.5.1"
 
 [target.'cfg(windows)'.dependencies]
 # Windows特有
