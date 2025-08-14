@@ -197,10 +197,6 @@ new-crate = "1.0"
 
 **コミット**: `style: apply rustfmt and clippy fixes`
 
-### 🧪 使用例
-
-[実装した機能の使用例]
-
 ### 📝 次のステップ
 
 [この実装後に続けて実装すべき関連機能]
