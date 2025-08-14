@@ -13,8 +13,8 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::error::AudioError;
 use super::super::traits::{AudioDecoder, AudioFormat, AudioFormatType};
+use crate::error::AudioError;
 
 /// FLAC-specific audio decoder for high-quality lossless audio
 pub struct FlacDecoder {
@@ -38,7 +38,11 @@ impl FlacDecoder {
     /// Create a new FLAC decoder from a file path
     pub fn from_file(path: &Path) -> Result<Self, AudioError> {
         let file = std::fs::File::open(path).map_err(|e| {
-            AudioError::Streaming(format!("Failed to open FLAC file {}: {}", path.display(), e))
+            AudioError::Streaming(format!(
+                "Failed to open FLAC file {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         let source = Box::new(file);
@@ -121,7 +125,12 @@ impl FlacDecoder {
             {
                 return Ok(0); // End of stream
             }
-            Err(e) => return Err(AudioError::Streaming(format!("Error reading FLAC packet: {}", e))),
+            Err(e) => {
+                return Err(AudioError::Streaming(format!(
+                    "Error reading FLAC packet: {}",
+                    e
+                )))
+            }
         };
 
         // Skip packets for other tracks
@@ -130,9 +139,10 @@ impl FlacDecoder {
         }
 
         // Decode packet and convert to f32 samples with high precision in one go
-        let audio_buf = self.decoder.decode(&packet).map_err(|e| {
-            AudioError::Streaming(format!("Error decoding FLAC packet: {}", e))
-        })?;
+        let audio_buf = self
+            .decoder
+            .decode(&packet)
+            .map_err(|e| AudioError::Streaming(format!("Error decoding FLAC packet: {}", e)))?;
 
         // Initialize sample buffer if needed
         if self.sample_buffer.is_none() {
@@ -154,7 +164,6 @@ impl FlacDecoder {
         Ok(copy_len)
     }
 
-
     /// Get current position in seconds with high precision
     pub fn position(&self) -> Duration {
         Duration::from_secs_f64(self.current_position as f64 / self.format.sample_rate as f64)
@@ -162,18 +171,16 @@ impl FlacDecoder {
 
     /// Get total duration with high precision (FLAC has exact duration)
     pub fn duration(&self) -> Option<Duration> {
-        self.total_samples.map(|samples| {
-            Duration::from_secs_f64(samples as f64 / self.format.sample_rate as f64)
-        })
+        self.total_samples
+            .map(|samples| Duration::from_secs_f64(samples as f64 / self.format.sample_rate as f64))
     }
 
     /// Get compression ratio (comparing to uncompressed size)
     pub fn compression_ratio(&self) -> Option<f32> {
         if let Some(total_samples) = self.total_samples {
-            let _uncompressed_size = total_samples 
-                * self.format.channels as u64 
-                * (self.format.bit_depth as u64 / 8);
-            
+            let _uncompressed_size =
+                total_samples * self.format.channels as u64 * (self.format.bit_depth as u64 / 8);
+
             // This would require file size information
             // For now, return None - in a full implementation,
             // we'd track the compressed file size
@@ -193,11 +200,11 @@ impl FlacDecoder {
     /// Get FLAC-specific encoding info
     pub fn encoding_info(&self) -> FlacEncodingInfo {
         let codec_params = &self.track.codec_params;
-        
+
         FlacEncodingInfo {
             bits_per_sample: codec_params.bits_per_sample.unwrap_or(16) as u8,
-            block_size: None, // Would extract from FLAC metadata blocks
-            md5_signature: None, // Would extract from STREAMINFO block
+            block_size: None,      // Would extract from FLAC metadata blocks
+            md5_signature: None,   // Would extract from STREAMINFO block
             encoder_version: None, // Would extract from VORBIS_COMMENT
         }
     }
@@ -260,8 +267,14 @@ mod tests {
 
     #[test]
     fn test_flac_format_detection() {
-        assert_eq!(AudioFormatType::from_extension("flac"), AudioFormatType::Flac);
-        assert_eq!(AudioFormatType::from_extension("FLAC"), AudioFormatType::Flac);
+        assert_eq!(
+            AudioFormatType::from_extension("flac"),
+            AudioFormatType::Flac
+        );
+        assert_eq!(
+            AudioFormatType::from_extension("FLAC"),
+            AudioFormatType::Flac
+        );
     }
 
     #[test]
@@ -272,7 +285,7 @@ mod tests {
             md5_signature: None,
             encoder_version: Some("FLAC 1.4.0".to_string()),
         };
-        
+
         assert_eq!(info.bits_per_sample, 24);
         assert_eq!(info.block_size, Some(4096));
     }

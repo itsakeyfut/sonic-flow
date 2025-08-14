@@ -13,8 +13,8 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::error::AudioError;
 use super::super::traits::{AudioDecoder, AudioFormat, AudioFormatType};
+use crate::error::AudioError;
 
 /// WAV-specific audio decoder for uncompressed PCM audio
 pub struct WavDecoder {
@@ -109,7 +109,9 @@ impl WavDecoder {
         let wav_format = WavFormat {
             format_tag: 1, // Default to PCM
             block_align: (format.channels * format.bit_depth / 8),
-            avg_bytes_per_sec: format.sample_rate * format.channels as u32 * (format.bit_depth as u32 / 8),
+            avg_bytes_per_sec: format.sample_rate
+                * format.channels as u32
+                * (format.bit_depth as u32 / 8),
             is_extensible: false, // Would detect from actual WAV header
         };
 
@@ -138,7 +140,12 @@ impl WavDecoder {
             {
                 return Ok(0); // End of stream
             }
-            Err(e) => return Err(AudioError::Streaming(format!("Error reading WAV packet: {}", e))),
+            Err(e) => {
+                return Err(AudioError::Streaming(format!(
+                    "Error reading WAV packet: {}",
+                    e
+                )))
+            }
         };
 
         // Skip packets for other tracks
@@ -147,9 +154,10 @@ impl WavDecoder {
         }
 
         // Decode packet (fast for uncompressed WAV)
-        let audio_buf = self.decoder.decode(&packet).map_err(|e| {
-            AudioError::Streaming(format!("Error decoding WAV packet: {}", e))
-        })?;
+        let audio_buf = self
+            .decoder
+            .decode(&packet)
+            .map_err(|e| AudioError::Streaming(format!("Error decoding WAV packet: {}", e)))?;
 
         // Initialize sample buffer if needed
         if self.sample_buffer.is_none() {
@@ -221,8 +229,7 @@ impl WavDecoder {
             .map_err(|e| {
                 AudioError::Streaming(format!(
                     "Failed to seek in WAV to sample {}: {}",
-                    sample_position,
-                    e
+                    sample_position, e
                 ))
             })?;
 
@@ -269,7 +276,7 @@ mod tests {
     fn test_wav_format_info() {
         let wav_format = WavFormat {
             format_tag: 1,
-            block_align: 4, // 16-bit stereo
+            block_align: 4,            // 16-bit stereo
             avg_bytes_per_sec: 176400, // 44.1kHz * 2 channels * 2 bytes
             is_extensible: false,
         };
@@ -285,14 +292,14 @@ mod tests {
         let sample_rate = 44100;
         let channels = 2;
         let bit_depth = 16;
-        
+
         let block_align = channels * bit_depth / 8;
         assert_eq!(block_align, 4);
-        
+
         let duration_seconds = 10.0;
         let total_samples = (duration_seconds * sample_rate as f64) as u64;
         let audio_data_size = total_samples * block_align as u64;
-        
+
         assert_eq!(total_samples, 441000);
         assert_eq!(audio_data_size, 1764000);
     }

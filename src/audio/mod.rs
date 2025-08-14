@@ -7,9 +7,9 @@ pub mod analysis;
 pub mod decoder;
 pub mod effects;
 pub mod engine;
+pub mod metadata;
 pub mod renderer;
 pub mod traits;
-pub mod metadata;
 
 // Re-export main types for convenience
 pub use decoder::{create_decoder, is_supported_extension, supported_extensions, UniversalDecoder};
