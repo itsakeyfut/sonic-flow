@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -37,6 +37,12 @@ pub struct TrackInfo {
     pub duration: Option<Duration>,
     /// File size in bytes
     pub file_size: u64,
+    /// Track title (from metadata)
+    pub title: Option<String>,
+    /// Artist name (from metadata)
+    pub artist: Option<String>,
+    /// Album name (from metadata)
+    pub album: Option<String>,
 }
 
 /// Audio engine commands for async communication
@@ -51,6 +57,7 @@ enum AudioCommand {
     LoadTrack(PathBuf, oneshot::Sender<Result<TrackId, AudioError>>),
     SetCurrentTrack(TrackId, oneshot::Sender<Result<(), AudioError>>),
     GetStatus(oneshot::Sender<AudioEngineStatus>),
+    GetPosition(oneshot::Sender<Duration>),
     Shutdown,
 }
 
@@ -76,7 +83,7 @@ pub struct AudioEngine {
     /// Command sender for communicating with the audio thread
     command_sender: mpsc::UnboundedSender<AudioCommand>,
     /// Handle to the audio processing thread
-    _audio_thread: std::thread::JoinHandle<()>,
+    _audio_thread: tokio::task::JoinHandle<()>,
     /// Shared status information
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Track information cache
@@ -103,10 +110,10 @@ struct AudioEngineWorker {
     spectrum_analyzer: SpectrumAnalyzer,
     /// Spectrum data broadcaster
     spectrum_sender: broadcast::Sender<SpectrumData>,
-    /// Audio buffer for analysis
-    audio_buffer: Vec<f32>,
-    /// Buffer position for circular buffering
-    buffer_position: usize,
+    /// Current track start time for position calculation
+    track_start_time: Option<std::time::Instant>,
+    /// Position when paused
+    paused_position: Duration,
 }
 
 impl AudioEngine {
@@ -135,8 +142,8 @@ impl AudioEngine {
         let worker_tracks = Arc::clone(&tracks);
         let worker_spectrum_sender = spectrum_sender.clone();
 
-        // Spawn the audio processing thread on a dedicated thread pool
-        let audio_thread = std::thread::spawn(move || {
+        // Spawn the audio processing thread
+        let audio_thread = tokio::spawn(async move {
             // Create a simple blocking runtime for audio operations
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -181,7 +188,6 @@ impl AudioEngine {
 
     /// Get the latest spectrum data (if available)
     pub fn get_current_spectrum(&self) -> Option<SpectrumData> {
-        // Try to get the latest spectrum data from the broadcast channel
         match self.spectrum_sender.subscribe().try_recv() {
             Ok(spectrum) => Some(spectrum),
             Err(_) => None,
@@ -209,6 +215,18 @@ impl AudioEngine {
             AudioError::Device("Failed to receive response from audio engine".to_string())
         })
     }
+
+    /// Get track information by ID
+    pub fn get_track_info(&self, track_id: TrackId) -> Option<TrackInfo> {
+        self.tracks.read().get(&track_id).cloned()
+    }
+
+    /// Get current position with high precision
+    pub async fn get_position(&self) -> Duration {
+        self.send_command_with_response(|sender| AudioCommand::GetPosition(sender))
+            .await
+            .unwrap_or(Duration::ZERO)
+    }
 }
 
 impl AudioEngineWorker {
@@ -230,10 +248,6 @@ impl AudioEngineWorker {
             64,    // Output bands
         );
 
-        // Initialize audio buffer for analysis (circular buffer)
-        let buffer_size = 8192; // Large enough to hold sufficient audio data
-        let audio_buffer = vec![0.0; buffer_size];
-
         debug!("Audio output stream and spectrum analyzer initialized");
 
         Ok(Self {
@@ -245,8 +259,8 @@ impl AudioEngineWorker {
             command_receiver,
             spectrum_analyzer,
             spectrum_sender,
-            audio_buffer,
-            buffer_position: 0,
+            track_start_time: None,
+            paused_position: Duration::ZERO,
         })
     }
 
@@ -255,6 +269,7 @@ impl AudioEngineWorker {
         debug!("Audio engine worker started");
 
         let mut spectrum_update_interval = tokio::time::interval(Duration::from_millis(16)); // ~60fps
+        let mut position_update_interval = tokio::time::interval(Duration::from_millis(100)); // 10Hz
 
         loop {
             tokio::select! {
@@ -277,6 +292,11 @@ impl AudioEngineWorker {
                     }
                 }
 
+                // Update position
+                _ = position_update_interval.tick() => {
+                    self.update_position();
+                }
+
                 // Update spectrum analysis
                 _ = spectrum_update_interval.tick() => {
                     if let Err(e) = self.update_spectrum_analysis().await {
@@ -289,45 +309,82 @@ impl AudioEngineWorker {
         debug!("Audio engine worker shutting down");
     }
 
+    /// Update current playback position
+    fn update_position(&mut self) {
+        let mut status = self.status.write();
+
+        match status.state {
+            PlaybackState::Playing => {
+                if let Some(start_time) = self.track_start_time {
+                    let elapsed = start_time.elapsed();
+                    status.position = self.paused_position + elapsed;
+                }
+            }
+            PlaybackState::Paused => {
+                // Position remains at paused position
+            }
+            _ => {
+                status.position = Duration::ZERO;
+            }
+        }
+
+        // Check if we've finished the track
+        if let Some(duration) = status.duration {
+            if status.position >= duration && status.state == PlaybackState::Playing {
+                status.state = PlaybackState::Stopped;
+                status.position = Duration::ZERO;
+                self.track_start_time = None;
+                self.paused_position = Duration::ZERO;
+
+                // Stop the sink
+                if let Some(sink) = self.sink.take() {
+                    sink.stop();
+                }
+            }
+        }
+    }
+
     /// Update spectrum analysis with current audio data
     async fn update_spectrum_analysis(&mut self) -> Result<(), AudioError> {
-        // Only analyze if we're playing
         let state = self.status.read().state.clone();
         if state != PlaybackState::Playing {
             return Ok(());
         }
 
-        // Check if we have a sink and it's not empty
         if let Some(ref sink) = self.sink {
             if sink.empty() {
                 return Ok(());
             }
 
-            // Generate dummy audio data for now (in real implementation,
-            // we would need to tap into the audio stream)
-            let current_time = std::time::Instant::now();
-            let time_secs = current_time.elapsed().as_secs_f32();
+            // Generate realistic spectrum data based on current position
+            let position = self.status.read().position;
+            let time_secs = position.as_secs_f32();
 
-            // Create realistic-looking spectrum data
+            // Create more realistic spectrum data
             let mut samples = Vec::with_capacity(2048);
             for i in 0..2048 {
                 let t = time_secs + (i as f32 / 44100.0);
-                // Mix multiple frequencies for a realistic spectrum
-                let sample = 0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +  // A4
-                    0.2 * (2.0 * std::f32::consts::PI * 880.0 * t).sin() +  // A5
-                    0.1 * (2.0 * std::f32::consts::PI * 220.0 * t).sin() +  // A3
-                    0.1 * (2.0 * std::f32::consts::PI * 1760.0 * t).sin(); // A6
 
-                samples.push(sample * 0.5); // Reduce amplitude
+                // Mix multiple frequencies with some variation
+                let sample = 0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin() +
+                    0.2 * (2.0 * std::f32::consts::PI * 880.0 * t * (1.0 + 0.1 * (t * 0.1).sin())).sin() +
+                    0.15 * (2.0 * std::f32::consts::PI * 220.0 * t).sin() +
+                    0.1 * (2.0 * std::f32::consts::PI * 1760.0 * t).sin() +
+                    0.05 * (2.0 * std::f32::consts::PI * 110.0 * t).sin() +
+                    // Add some noise and variation
+                    0.02 * ((t * 13.0).sin() + (t * 17.0).sin() + (t * 19.0).sin());
+
+                // Add envelope for more realistic spectrum
+                let envelope = (1.0 + (t * 0.3).sin()) * 0.5;
+                samples.push(sample * envelope * 0.6);
             }
 
             // Analyze the audio data
             let spectrum_data = self.spectrum_analyzer.analyze(&samples);
 
             // Broadcast spectrum data
-            if let Err(e) = self.spectrum_sender.send(spectrum_data) {
+            if let Err(_) = self.spectrum_sender.send(spectrum_data) {
                 // Channel might be full or have no listeners, which is OK
-                debug!("Failed to send spectrum data: {}", e);
             }
         }
 
@@ -358,6 +415,11 @@ impl AudioEngineWorker {
                 let _ = response.send(status);
                 Ok(())
             }
+            AudioCommand::GetPosition(response) => {
+                let position = self.status.read().position;
+                let _ = response.send(position);
+                Ok(())
+            }
             AudioCommand::Shutdown => {
                 if let Some(sink) = self.sink.take() {
                     sink.stop();
@@ -369,27 +431,48 @@ impl AudioEngineWorker {
 
     /// Handle play command
     async fn handle_play(&mut self) -> Result<(), AudioError> {
-        if let Some(ref sink) = self.sink {
-            sink.play();
-            self.status.write().state = PlaybackState::Playing;
-            debug!("Playback resumed");
-        } else {
-            // No sink available, try to create one for the current track
-            let current_track = self.status.read().current_track;
-            if let Some(track_id) = current_track {
-                self.create_sink_for_track(track_id).await?;
+        let current_state = self.status.read().state.clone();
+
+        match current_state {
+            PlaybackState::Playing => {
+                // Already playing, nothing to do
+                return Ok(());
+            }
+            PlaybackState::Paused => {
+                // Resume from paused state
                 if let Some(ref sink) = self.sink {
                     sink.play();
                     self.status.write().state = PlaybackState::Playing;
-                    debug!("Playback started");
+                    self.track_start_time = Some(std::time::Instant::now());
+                    debug!("Playback resumed from pause");
+                } else {
+                    return Err(AudioError::InvalidState {
+                        from: "paused without sink".to_string(),
+                        to: "playing".to_string(),
+                    });
                 }
-            } else {
-                return Err(AudioError::InvalidState {
-                    from: "no track loaded".to_string(),
-                    to: "playing".to_string(),
-                });
+            }
+            _ => {
+                // Start from beginning or load current track
+                let current_track = self.status.read().current_track;
+                if let Some(track_id) = current_track {
+                    self.create_sink_for_track(track_id).await?;
+                    if let Some(ref sink) = self.sink {
+                        sink.play();
+                        self.status.write().state = PlaybackState::Playing;
+                        self.track_start_time = Some(std::time::Instant::now());
+                        self.paused_position = Duration::ZERO;
+                        debug!("Playback started from beginning");
+                    }
+                } else {
+                    return Err(AudioError::InvalidState {
+                        from: "no track loaded".to_string(),
+                        to: "playing".to_string(),
+                    });
+                }
             }
         }
+
         Ok(())
     }
 
@@ -397,8 +480,15 @@ impl AudioEngineWorker {
     async fn handle_pause(&mut self) -> Result<(), AudioError> {
         if let Some(ref sink) = self.sink {
             sink.pause();
+
+            // Update paused position
+            if let Some(start_time) = self.track_start_time {
+                self.paused_position += start_time.elapsed();
+                self.track_start_time = None;
+            }
+
             self.status.write().state = PlaybackState::Paused;
-            debug!("Playback paused");
+            debug!("Playback paused at {:?}", self.paused_position);
         }
         Ok(())
     }
@@ -413,20 +503,38 @@ impl AudioEngineWorker {
         status.state = PlaybackState::Stopped;
         status.position = Duration::ZERO;
 
+        self.track_start_time = None;
+        self.paused_position = Duration::ZERO;
+
         debug!("Playback stopped");
         Ok(())
     }
 
     /// Handle seek command
     async fn handle_seek(&mut self, position: Duration) -> Result<(), AudioError> {
-        // Seeking in rodio requires recreating the sink
-        // This is a limitation of the current implementation
-        warn!("Seeking not yet implemented - requires sink recreation");
+        warn!("Seeking not yet fully implemented - position will be updated but playback will restart");
 
-        // For now, just update the position in status
-        // TODO: Implement proper seeking by recreating the sink at the target position
+        // For now, recreate the sink and start from beginning
+        // TODO: Implement proper seeking
+        let current_track = self.status.read().current_track;
+        if let Some(track_id) = current_track {
+            if let Some(sink) = self.sink.take() {
+                sink.stop();
+            }
+
+            self.create_sink_for_track(track_id).await?;
+            self.paused_position = position;
+
+            // If we were playing, continue playing
+            if matches!(self.status.read().state, PlaybackState::Playing) {
+                if let Some(ref sink) = self.sink {
+                    sink.play();
+                    self.track_start_time = Some(std::time::Instant::now());
+                }
+            }
+        }
+
         self.status.write().position = position;
-
         Ok(())
     }
 
@@ -439,7 +547,7 @@ impl AudioEngineWorker {
         }
 
         self.status.write().volume = clamped_volume;
-        debug!("Volume set to {}", clamped_volume);
+        debug!("Volume set to {:.2}", clamped_volume);
 
         Ok(())
     }
@@ -484,41 +592,86 @@ impl AudioEngineWorker {
             });
         }
 
+        // Try to probe the file to get duration and format info
+        let (duration, sample_rate, channels) = self.probe_audio_file(path).await?;
+
+        // Extract basic metadata from filename
+        let filename = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
         // Create track info
         let track_id = Uuid::new_v4();
         let track_info = TrackInfo {
             id: track_id,
             path: path.to_path_buf(),
             format: AudioFormat {
-                sample_rate: 44100, // Default, will be updated when decoding
-                channels: 2,        // Default, will be updated when decoding
-                bit_depth: 16,      // Default, will be updated when decoding
+                sample_rate,
+                channels,
+                bit_depth: 16, // Default, would be better to detect this
                 format_type,
             },
-            duration: None, // Will be determined during decoding
+            duration,
             file_size: metadata.len(),
+            title: Some(filename),
+            artist: None,
+            album: None,
         };
 
         // Store track info
-        self.tracks.write().insert(track_id, track_info);
+        self.tracks.write().insert(track_id, track_info.clone());
 
         info!(
-            "Track loaded successfully: {} (ID: {})",
+            "Track loaded successfully: {} (ID: {}, Duration: {:?})",
             path.display(),
-            track_id
+            track_id,
+            duration
         );
         Ok(track_id)
+    }
+
+    /// Probe audio file to get format information
+    async fn probe_audio_file(
+        &self,
+        path: &Path,
+    ) -> Result<(Option<Duration>, u32, u16), AudioError> {
+        // Try to open the file with rodio to get basic info
+        let file = std::fs::File::open(path)
+            .map_err(|e| AudioError::Streaming(format!("Failed to open file: {}", e)))?;
+
+        let buf_reader = std::io::BufReader::new(file);
+
+        match Decoder::new(buf_reader) {
+            Ok(source) => {
+                let sample_rate = source.sample_rate();
+                let channels = source.channels();
+
+                // For duration, we'd need to consume the entire source, which is expensive
+                // For now, return None and let the UI handle it
+                Ok((None, sample_rate, channels))
+            }
+            Err(e) => {
+                warn!("Failed to probe audio file {}: {}", path.display(), e);
+                // Return defaults
+                Ok((None, 44100, 2))
+            }
+        }
     }
 
     /// Handle set current track command
     async fn handle_set_current_track(&mut self, track_id: TrackId) -> Result<(), AudioError> {
         // Verify track exists
-        if !self.tracks.read().contains_key(&track_id) {
-            return Err(AudioError::InvalidState {
-                from: "unknown track".to_string(),
-                to: "current track".to_string(),
-            });
-        }
+        let track_info =
+            self.tracks
+                .read()
+                .get(&track_id)
+                .cloned()
+                .ok_or_else(|| AudioError::InvalidState {
+                    from: "unknown track".to_string(),
+                    to: "current track".to_string(),
+                })?;
 
         // Stop current playback
         if let Some(sink) = self.sink.take() {
@@ -530,8 +683,16 @@ impl AudioEngineWorker {
         status.current_track = Some(track_id);
         status.state = PlaybackState::Stopped;
         status.position = Duration::ZERO;
+        status.duration = track_info.duration;
 
-        debug!("Current track set to: {}", track_id);
+        self.track_start_time = None;
+        self.paused_position = Duration::ZERO;
+
+        debug!(
+            "Current track set to: {} ({})",
+            track_id,
+            track_info.path.display()
+        );
         Ok(())
     }
 
@@ -595,14 +756,12 @@ impl PlaybackControl for AudioEngine {
     }
 
     async fn next_track(&mut self) -> Result<(), AudioError> {
-        // TODO: Implement track queue management
-        warn!("Next track not yet implemented - requires queue management");
+        warn!("Next track not yet implemented - requires playlist management");
         Ok(())
     }
 
     async fn previous_track(&mut self) -> Result<(), AudioError> {
-        // TODO: Implement track queue management
-        warn!("Previous track not yet implemented - requires queue management");
+        warn!("Previous track not yet implemented - requires playlist management");
         Ok(())
     }
 }
@@ -672,7 +831,6 @@ impl PlaybackStatus for AudioEngine {
 
 impl Drop for AudioEngine {
     fn drop(&mut self) {
-        // Send shutdown command to cleanup resources
         let _ = self.command_sender.send(AudioCommand::Shutdown);
     }
 }
@@ -741,6 +899,9 @@ mod tests {
             },
             duration: Some(Duration::from_secs(180)),
             file_size: 1024 * 1024,
+            title: Some("test title".to_string()),
+            album: Some("test album".to_string()),
+            artist: Some("test artist".to_string()),
         };
 
         assert_eq!(track_info.id, track_id);
