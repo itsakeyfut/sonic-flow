@@ -83,7 +83,7 @@ pub struct AudioEngine {
     /// Command sender for communicating with the audio thread
     command_sender: mpsc::UnboundedSender<AudioCommand>,
     /// Handle to the audio processing thread
-    _audio_thread: tokio::task::JoinHandle<()>,
+    _audio_thread: std::thread::JoinHandle<()>,
     /// Shared status information
     status: Arc<RwLock<AudioEngineStatus>>,
     /// Track information cache
@@ -121,9 +121,23 @@ impl AudioEngine {
     pub fn new() -> Result<Self, AudioError> {
         info!("Initializing audio engine");
 
+        // Test audio system availability first
+        match OutputStream::try_default() {
+            Ok((test_stream, _)) => {
+                drop(test_stream);
+                debug!("Audio system test successful");
+            }
+            Err(e) => {
+                error!("Audio system test failed: {}", e);
+                return Err(AudioError::Device(format!("Audio system not available: {}", e)));
+            }
+        }
+
         // Create communication channels
         let (command_sender, command_receiver) = mpsc::unbounded_channel();
         let (spectrum_sender, _) = broadcast::channel(100);
+
+        debug!("Communication channels created");
 
         // Initialize shared state
         let status = Arc::new(RwLock::new(AudioEngineStatus {
@@ -137,14 +151,20 @@ impl AudioEngine {
 
         let tracks = Arc::new(RwLock::new(HashMap::new()));
 
+        debug!("Shared state initialized");
+
         // Clone for worker thread
         let worker_status = Arc::clone(&status);
         let worker_tracks = Arc::clone(&tracks);
         let worker_spectrum_sender = spectrum_sender.clone();
 
-        // Spawn the audio processing thread
-        let audio_thread = tokio::spawn(async move {
-            // Create a simple blocking runtime for audio operations
+        debug!("Spawning audio worker thread");
+
+        // Spawn the audio processing thread as std::thread instead of tokio::spawn
+        let audio_thread = std::thread::spawn(move || {
+            debug!("Audio worker thread started");
+            
+            // Create a new Tokio runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -161,6 +181,7 @@ impl AudioEngine {
 
                 match worker {
                     Ok(mut worker) => {
+                        info!("Audio worker initialized successfully");
                         worker.run().await;
                     }
                     Err(e) => {
@@ -170,7 +191,7 @@ impl AudioEngine {
             });
         });
 
-        debug!("Audio engine initialized successfully");
+        debug!("Audio engine initialization completed");
 
         Ok(Self {
             command_sender,
@@ -198,7 +219,10 @@ impl AudioEngine {
     async fn send_command(&self, command: AudioCommand) -> Result<(), AudioError> {
         self.command_sender
             .send(command)
-            .map_err(|_| AudioError::Device("Audio engine not available".to_string()))
+            .map_err(|e| {
+                error!("Failed to send command to audio engine: {}", e);
+                AudioError::Device("Audio engine not available".to_string())
+            })
     }
 
     /// Send a command and wait for a response
