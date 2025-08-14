@@ -166,7 +166,8 @@ fn init_logging() -> Result<()> {
             .with_thread_ids(true)
             .with_line_number(true)
             .with_file(cfg!(debug_assertions))
-            .with_ansi(true), // Enable colors for better readability
+            .with_ansi(true)
+            .pretty(), // より読みやすい出力形式
     );
 
     // Add file logging in release mode

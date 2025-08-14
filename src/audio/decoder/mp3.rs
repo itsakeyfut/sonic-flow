@@ -12,8 +12,8 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::error::AudioError;
 use super::super::traits::{AudioDecoder, AudioFormat, AudioFormatType};
+use crate::error::AudioError;
 
 /// MP3-specific audio decoder with advanced features
 pub struct Mp3Decoder {
@@ -112,11 +112,17 @@ impl Mp3Decoder {
         // Read next packet
         let packet = match self.format_reader.next_packet() {
             Ok(packet) => packet,
-            Err(symphonia::core::errors::Error::IoError(e)) 
-                if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+            Err(symphonia::core::errors::Error::IoError(e))
+                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
                 return Ok(0); // End of stream
             }
-            Err(e) => return Err(AudioError::Streaming(format!("Error reading packet: {}", e))),
+            Err(e) => {
+                return Err(AudioError::Streaming(format!(
+                    "Error reading packet: {}",
+                    e
+                )))
+            }
         };
 
         // Skip packets for other tracks
@@ -125,9 +131,10 @@ impl Mp3Decoder {
         }
 
         // Decode packet and convert to f32 samples in one go
-        let audio_buf = self.decoder.decode(&packet).map_err(|e| {
-            AudioError::Streaming(format!("Error decoding MP3 packet: {}", e))
-        })?;
+        let audio_buf = self
+            .decoder
+            .decode(&packet)
+            .map_err(|e| AudioError::Streaming(format!("Error decoding MP3 packet: {}", e)))?;
 
         // Initialize sample buffer if needed
         if self.sample_buffer.is_none() {
@@ -156,9 +163,8 @@ impl Mp3Decoder {
 
     /// Get total duration (if available)
     pub fn duration(&self) -> Option<Duration> {
-        self.total_samples.map(|samples| {
-            Duration::from_secs_f64(samples as f64 / self.format.sample_rate as f64)
-        })
+        self.total_samples
+            .map(|samples| Duration::from_secs_f64(samples as f64 / self.format.sample_rate as f64))
     }
 }
 

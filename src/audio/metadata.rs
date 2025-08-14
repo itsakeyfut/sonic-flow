@@ -23,29 +23,29 @@ pub struct TrackMetadata {
     pub track_total: Option<u32>,
     pub disc_number: Option<u32>,
     pub disc_total: Option<u32>,
-    
+
     // Extended information
     pub genre: Option<String>,
     pub composer: Option<String>,
     pub performer: Option<String>,
     pub conductor: Option<String>,
     pub comment: Option<String>,
-    
+
     // Technical information
     pub duration: Option<Duration>,
     pub bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
     pub bit_depth: Option<u16>,
-    
+
     // File information
     pub file_size: Option<u64>,
     pub format: Option<String>,
     pub encoding: Option<String>,
-    
+
     // Artwork
     pub artwork: Option<ArtworkInfo>,
-    
+
     // Additional tags (format-specific)
     pub custom_tags: std::collections::HashMap<String, String>,
 }
@@ -111,9 +111,8 @@ impl MetadataExtractor {
     fn extract_mp3_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
         use id3::{Tag, TagLike};
 
-        let tag = Tag::read_from_path(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to read ID3 tag: {}", e))
-        })?;
+        let tag = Tag::read_from_path(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to read ID3 tag: {}", e)))?;
 
         let mut metadata = TrackMetadata::default();
 
@@ -128,7 +127,7 @@ impl MetadataExtractor {
         metadata.disc_number = tag.disc().map(|d| d as u32);
         metadata.disc_total = tag.total_discs().map(|d| d as u32);
         metadata.genre = tag.genre().map(|g| g.to_string());
-        
+
         // Extended tags
         for frame in tag.frames() {
             match frame.id() {
@@ -138,7 +137,9 @@ impl MetadataExtractor {
                 "COMM" => metadata.comment = frame.content().text().map(|s| s.to_string()),
                 _ => {
                     if let Some(text) = frame.content().text() {
-                        metadata.custom_tags.insert(frame.id().to_string(), text.to_string());
+                        metadata
+                            .custom_tags
+                            .insert(frame.id().to_string(), text.to_string());
                     }
                 }
             }
@@ -157,9 +158,8 @@ impl MetadataExtractor {
         }
 
         // Get file information
-        let file_info = std::fs::metadata(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to get file info: {}", e))
-        })?;
+        let file_info = std::fs::metadata(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to get file info: {}", e)))?;
         metadata.file_size = Some(file_info.len());
         metadata.format = Some("MP3".to_string());
 
@@ -170,9 +170,8 @@ impl MetadataExtractor {
     fn extract_flac_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
         use metaflac::Tag;
 
-        let tag = Tag::read_from_path(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to read FLAC metadata: {}", e))
-        })?;
+        let tag = Tag::read_from_path(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to read FLAC metadata: {}", e)))?;
 
         let mut metadata = TrackMetadata::default();
 
@@ -218,7 +217,7 @@ impl MetadataExtractor {
             metadata.sample_rate = Some(streaminfo.sample_rate);
             metadata.channels = Some(streaminfo.num_channels as u16);
             metadata.bit_depth = Some(streaminfo.bits_per_sample as u16);
-            
+
             if streaminfo.total_samples > 0 {
                 let duration_secs = streaminfo.total_samples as f64 / streaminfo.sample_rate as f64;
                 metadata.duration = Some(Duration::from_secs_f64(duration_secs));
@@ -243,9 +242,8 @@ impl MetadataExtractor {
         }
 
         // Get file information
-        let file_info = std::fs::metadata(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to get file info: {}", e))
-        })?;
+        let file_info = std::fs::metadata(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to get file info: {}", e)))?;
         metadata.file_size = Some(file_info.len());
         metadata.format = Some("FLAC".to_string());
         metadata.encoding = Some("Lossless".to_string());
@@ -257,9 +255,8 @@ impl MetadataExtractor {
     fn extract_wav_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
         use hound::WavReader;
 
-        let reader = WavReader::open(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to open WAV file: {}", e))
-        })?;
+        let reader = WavReader::open(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to open WAV file: {}", e)))?;
 
         let spec = reader.spec();
         let mut metadata = TrackMetadata::default();
@@ -274,9 +271,8 @@ impl MetadataExtractor {
         metadata.duration = Some(Duration::from_secs_f64(duration_secs));
 
         // Get file information
-        let file_info = std::fs::metadata(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to get file info: {}", e))
-        })?;
+        let file_info = std::fs::metadata(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to get file info: {}", e)))?;
         metadata.file_size = Some(file_info.len());
         metadata.format = Some("WAV".to_string());
         metadata.encoding = Some("PCM".to_string());
@@ -307,14 +303,13 @@ impl MetadataExtractor {
 
     /// Extract metadata using Symphonia (fallback)
     fn extract_generic_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
+        use symphonia::core::formats::FormatOptions;
         use symphonia::core::io::MediaSourceStream;
         use symphonia::core::meta::MetadataOptions;
-        use symphonia::core::formats::FormatOptions;
         use symphonia::core::probe::Hint;
 
-        let file = std::fs::File::open(path).map_err(|e| {
-            AudioError::Metadata(format!("Failed to open file: {}", e))
-        })?;
+        let file = std::fs::File::open(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to open file: {}", e)))?;
 
         let source = Box::new(file);
         let mss = MediaSourceStream::new(source, Default::default());
@@ -347,7 +342,9 @@ impl MetadataExtractor {
                         "TRACK" => metadata.track_number = tag.value.to_string().parse().ok(),
                         "GENRE" => metadata.genre = Some(tag.value.to_string()),
                         _ => {
-                            metadata.custom_tags.insert(tag.key.clone(), tag.value.to_string());
+                            metadata
+                                .custom_tags
+                                .insert(tag.key.clone(), tag.value.to_string());
                         }
                     }
                 }

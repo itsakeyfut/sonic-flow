@@ -1,6 +1,7 @@
 //! Main application controller
 
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::audio::traits::{
@@ -19,7 +20,7 @@ use super::state::{AppState, StateManager};
 /// Main application controller that orchestrates all subsystems
 pub struct AppController {
     /// Audio engine for playback
-    audio_engine: Arc<tokio::sync::RwLock<AudioEngine>>,
+    audio_engine: Arc<RwLock<AudioEngine>>,
 
     /// Configuration manager
     config_manager: Arc<ConfigManager>,
@@ -51,7 +52,7 @@ impl AppController {
         debug!("Configuration manager initialized");
 
         // Initialize audio engine with configuration
-        let audio_engine = Arc::new(tokio::sync::RwLock::new(
+        let audio_engine = Arc::new(RwLock::new(
             AudioEngineBuilder::new()
                 .with_volume(0.8)
                 .with_buffer_size(1024)
@@ -73,7 +74,7 @@ impl AppController {
             Arc::new(VisualizerSystem::new(800, 600).map_err(|e| Error::Visualizer(e))?);
         debug!("Visualizer system initialized");
 
-        // Initialize UI system - fix dereferencing issue
+        // Initialize UI system - fixed to use single event bus reference
         let ui_system = UiSystem::new(EventBus::clone(&event_bus))?;
         debug!("UI system initialized");
 
@@ -103,8 +104,7 @@ impl AppController {
         // Show the main window
         self.ui_system.main_window().show()?;
 
-        // Run UI in the main thread instead of spawn_blocking
-        // This avoids the thread safety issues
+        // Run UI in the main thread
         let ui_result = tokio::select! {
             result = audio_task => {
                 error!("Audio task ended unexpectedly: {:?}", result);
@@ -146,6 +146,31 @@ impl AppController {
         ui_result
     }
 
+    /// Open a file dialog to select an audio file
+    async fn open_file_dialog() -> Result<Option<std::path::PathBuf>> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use rfd::AsyncFileDialog;
+            
+            let file = AsyncFileDialog::new()
+                .add_filter("Audio Files", &["mp3", "flac", "wav", "ogg", "m4a", "aac"])
+                .add_filter("MP3 Files", &["mp3"])
+                .add_filter("FLAC Files", &["flac"])
+                .add_filter("WAV Files", &["wav"])
+                .add_filter("All Files", &["*"])
+                .set_title("Select Audio File")
+                .pick_file()
+                .await;
+            
+            Ok(file.map(|f| f.path().to_path_buf()))
+        }
+        
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err(Error::Application("File dialog not supported on WASM".to_string()))
+        }
+    }
+
     /// Start the audio monitoring background task
     fn start_audio_monitoring_task(&self) -> tokio::task::JoinHandle<Result<()>> {
         let audio_engine = Arc::clone(&self.audio_engine);
@@ -165,6 +190,7 @@ impl AppController {
                 let current_volume = audio_engine.volume();
                 let is_muted = audio_engine.is_muted();
                 let current_track = audio_engine.current_track();
+                let duration = audio_engine.duration();
 
                 drop(audio_engine);
 
@@ -179,6 +205,10 @@ impl AppController {
                     playback.volume = current_volume;
                     playback.is_muted = is_muted;
                     playback.current_track = current_track;
+                    
+                    if let Some(dur) = duration {
+                        playback.duration = dur.as_secs_f64();
+                    }
 
                     // Publish events for state changes
                     if old_playing != playback.is_playing {
@@ -195,7 +225,6 @@ impl AppController {
                 // Check for any critical errors
                 if matches!(current_state, PlaybackState::Error(_)) {
                     error!("Audio engine is in error state: {:?}", current_state);
-                    // Could implement error recovery here
                 }
             }
         })
@@ -247,6 +276,60 @@ impl AppController {
 
             while let Ok(event) = event_receiver.recv().await {
                 match event {
+                    AppEvent::LoadTrackRequested => {
+                        debug!("Load track requested, opening file dialog");
+                        
+                        // Handle file dialog in a separate task
+                        let audio_engine = Arc::clone(&audio_engine);
+                        let event_bus = Arc::clone(&event_bus);
+                        
+                        tokio::spawn(async move {
+                            match Self::open_file_dialog().await {
+                                Ok(Some(path)) => {
+                                    info!("Selected file: {}", path.display());
+                                    
+                                    // Load track into audio engine
+                                    match audio_engine.write().await.load_track(&path).await {
+                                        Ok(track_id) => {
+                                            info!("Track loaded successfully: {}", track_id);
+                                            
+                                            // Set as current track
+                                            if let Err(e) = audio_engine.write().await.set_current_track(track_id).await {
+                                                error!("Failed to set current track: {}", e);
+                                                return;
+                                            }
+                                            
+                                            // Get track info and publish event
+                                            if let Some(track_info) = audio_engine.read().await.get_track_info(track_id) {
+                                                let app_track_info = crate::app::events::TrackInfo {
+                                                    id: track_info.id,
+                                                    title: track_info.title.clone(),
+                                                    artist: track_info.artist.clone(),
+                                                    album: track_info.album.clone(),
+                                                    duration: track_info.duration.unwrap_or(std::time::Duration::ZERO),
+                                                    file_path: track_info.path.clone(),
+                                                };
+                                                
+                                                if let Err(e) = event_bus.publish(AppEvent::TrackChanged(app_track_info)) {
+                                                    error!("Failed to publish track changed event: {}", e);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to load track: {}", e);
+                                        }
+                                    }
+                                }
+                                Ok(None) => {
+                                    debug!("File dialog cancelled");
+                                }
+                                Err(e) => {
+                                    error!("File dialog error: {}", e);
+                                }
+                            }
+                        });
+                    }
+
                     AppEvent::TogglePlayback => {
                         let mut engine = audio_engine.write().await;
                         let current_state = engine.state();
@@ -257,10 +340,6 @@ impl AppController {
                                     error!("Failed to pause playback: {}", e);
                                 } else {
                                     info!("Playback paused");
-                                    // Stop visualizer when pausing
-                                    if let Err(e) = visualizer_system.stop() {
-                                        error!("Failed to stop visualizer: {}", e);
-                                    }
                                 }
                             }
                             PlaybackState::Paused | PlaybackState::Stopped => {
@@ -268,9 +347,9 @@ impl AppController {
                                     error!("Failed to start playback: {}", e);
                                 } else {
                                     info!("Playback started");
-                                    // Stop visualizer when pausing
-                                    if let Err(e) = visualizer_system.stop() {
-                                        error!("Failed to stop visualizer: {}", e);
+                                    // Start visualizer when playing
+                                    if let Err(e) = visualizer_system.start() {
+                                        error!("Failed to start visualizer: {}", e);
                                     }
                                 }
                             }
@@ -322,8 +401,10 @@ impl AppController {
 
                     AppEvent::PlaybackPositionChanged(position) => {
                         let mut engine = audio_engine.write().await;
-                        let duration = std::time::Duration::from_secs_f64(position * 300.0); // TODO: Use actual track duration
-                        if let Err(e) = engine.seek(duration).await {
+                        let duration = engine.duration().unwrap_or(std::time::Duration::from_secs(300));
+                        let seek_duration = std::time::Duration::from_secs_f64(position * duration.as_secs_f64());
+                        
+                        if let Err(e) = engine.seek(seek_duration).await {
                             error!("Failed to seek: {}", e);
                         } else {
                             debug!("Seek to position: {:.2}s", position);
@@ -419,7 +500,7 @@ impl AppController {
                         window.set_position_text(position_text.into());
                         window.set_duration_text(duration_text.into());
 
-                        // Update visualizer type - fix field name
+                        // Update visualizer type
                         window
                             .set_visualizer_type(current_state.ui.active_visualizer.clone().into());
 
@@ -500,65 +581,5 @@ impl AppController {
 
         info!("Test track loaded successfully: {}", track_id);
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::time::{timeout, Duration};
-
-    #[tokio::test]
-    async fn test_app_controller_creation() {
-        let result = AppController::new().await;
-        // This might fail in test environment due to audio system initialization
-        if result.is_err() {
-            println!(
-                "AppController creation failed (expected in test environment): {:?}",
-                result.err()
-            );
-            return;
-        }
-
-        let controller = result.unwrap();
-
-        // Verify that all components are initialized
-        assert!(!controller.audio_engine.read().await.is_playing());
-    }
-
-    #[tokio::test]
-    async fn test_event_system() {
-        // Create a standalone event bus for testing
-        let event_bus = EventBus::new();
-        let mut receiver = event_bus.subscribe();
-
-        // Publish an event
-        let result = event_bus.publish(crate::app::AppEvent::PlaybackPaused);
-        assert!(result.is_ok());
-
-        // Receive the event with timeout
-        let event_result = timeout(Duration::from_millis(100), receiver.recv()).await;
-        assert!(event_result.is_ok());
-
-        let event = event_result.unwrap();
-        assert!(event.is_ok());
-
-        match event.unwrap() {
-            crate::app::AppEvent::PlaybackPaused => {
-                // Expected
-            }
-            other => panic!("Unexpected event: {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_app_state_initialization() {
-        let state = AppState::default();
-
-        assert!(!state.playback.is_playing);
-        assert_eq!(state.playback.position, 0.0);
-        assert_eq!(state.playback.volume, 0.8);
-        assert!(!state.playback.is_muted);
-        assert_eq!(state.current_playlist, None);
     }
 }

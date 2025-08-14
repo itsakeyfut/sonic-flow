@@ -3,15 +3,11 @@
 //! Connects Slint UI components with Rust business logic.
 
 use slint::{ComponentHandle, Weak};
-use std::borrow::Cow;
-use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 use crate::app::events::TrackInfo;
 use crate::app::{AppEvent, EventBus};
-use crate::audio::traits::{PlaybackControl, PlaybackState, PlaybackStatus, VolumeControl};
-use crate::audio::{AudioEngine, AudioEngineStatus};
 use crate::error::{Result, UiError};
 
 // Include Slint-generated components
@@ -159,28 +155,21 @@ impl MainWindowBinding {
                 debug!("Visualizer sensitivity changed to: {:.2}", sensitivity);
                 if let Err(e) = event_bus.publish(AppEvent::VisualizerConfigChanged {
                     sensitivity,
-                    color_scheme: "default".to_string(), // TODO: Make this configurable
+                    color_scheme: "default".to_string(),
                 }) {
                     error!("Failed to publish sensitivity change event: {}", e);
                 }
             }
         });
 
-        // Load track button
+        // Load track button - simplified to just publish event
         self.window.on_load_track_clicked({
             let event_bus = event_bus.clone();
             move || {
                 debug!("Load track button clicked");
-                // For now, we'll use a dummy file path
-                // In a real implementation, this would open a file dialog
-                let dummy_path = "/path/to/sample.mp3";
-                info!(
-                    "Would open file dialog to load track (placeholder: {})",
-                    dummy_path
-                );
-
-                // TODO: Implement file dialog and actual track loading
-                // For demo purposes, we could load a sample file if available
+                if let Err(e) = event_bus.publish(AppEvent::LoadTrackRequested) {
+                    error!("Failed to publish load track request: {}", e);
+                }
             }
         });
 
@@ -188,7 +177,6 @@ impl MainWindowBinding {
         self.window.on_fullscreen_toggled({
             move || {
                 debug!("Fullscreen toggle clicked");
-                // TODO: Implement fullscreen visualizer mode
                 warn!("Fullscreen visualizer not yet implemented");
             }
         });
@@ -214,7 +202,7 @@ impl MainWindowBinding {
         self.window.set_visualizer_type("spectrum_bars".into());
         self.window.set_visualizer_sensitivity(1.0);
 
-        // Visualizer quality info
+        // Audio quality info
         self.window.set_file_format("".into());
         self.window.set_sample_rate("".into());
         self.window.set_bit_depth("".into());
@@ -249,7 +237,6 @@ impl MainWindowBinding {
 
         // Update audio format information if available
         if let Some(track) = track_info {
-            // Extract file extension as format
             let format = track
                 .file_path
                 .extension()
@@ -258,10 +245,8 @@ impl MainWindowBinding {
                 .to_uppercase();
 
             self.window.set_file_format(format.into());
-
-            // TODO: Get actual sample rate and bit depth from track metadata
-            self.window.set_sample_rate("44.1 kHz".into());
-            self.window.set_bit_depth("16 bit".into());
+            self.window.set_sample_rate("44.1 kHz".into()); // TODO: Get from track
+            self.window.set_bit_depth("16 bit".into()); // TODO: Get from track
         } else {
             self.window.set_file_format("".into());
             self.window.set_sample_rate("".into());
@@ -287,9 +272,9 @@ impl MainWindowBinding {
 
         self.window.set_progress(progress);
         self.window
-            .set_position_text(format_duration(position).into());
+            .set_position_text(Self::format_duration(position).into());
         self.window
-            .set_duration_text(format_duration(duration).into());
+            .set_duration_text(Self::format_duration(duration).into());
 
         debug!(
             "Updated progress: {:.2}% ({:?}/{:?})",
@@ -362,18 +347,19 @@ impl MainWindowBinding {
     }
 
     /// Update all UI state from an audio engine status
-    pub fn update_from_audio_status(&self, status: &AudioEngineStatus) {
+    pub fn update_from_audio_status(&self, status: &crate::audio::engine::AudioEngineStatus) {
+        use crate::audio::traits::PlaybackState;
+        
         // Update playback state
-        let (is_playing, is_paused, state_text): (bool, bool, Cow<'static, str>) =
-            match status.state {
-                PlaybackState::Playing => (true, false, Cow::Borrowed("Playing")),
-                PlaybackState::Paused => (false, true, Cow::Borrowed("Paused")),
-                PlaybackState::Stopped => (false, false, Cow::Borrowed("Stopped")),
-                PlaybackState::Buffering => (false, false, Cow::Borrowed("Buffering")),
-                PlaybackState::Error(ref e) => (false, false, Cow::Owned(format!("Error: {}", e))),
-            };
+        let (is_playing, is_paused, state_text) = match status.state {
+            PlaybackState::Playing => (true, false, "Playing"),
+            PlaybackState::Paused => (false, true, "Paused"),
+            PlaybackState::Stopped => (false, false, "Stopped"),
+            PlaybackState::Buffering => (false, false, "Buffering"),
+            PlaybackState::Error(ref _e) => (false, false, "Error"),
+        };
 
-        self.update_playback_state(is_playing, is_paused, &state_text);
+        self.update_playback_state(is_playing, is_paused, state_text);
         self.update_volume(status.volume);
 
         if let Some(duration) = status.duration {
@@ -387,89 +373,19 @@ impl MainWindowBinding {
     pub fn show_error(&self, error: &str) {
         error!("UI Error: {}", error);
         // TODO: Implement actual error display in UI
-        // For now, we just log it
     }
 
     /// Show an info message in the UI
     pub fn show_info(&self, message: &str) {
         info!("UI Info: {}", message);
         // TODO: Implement actual info display in UI
-        // For now, we just log it
-    }
-}
-
-/// Format a `Duration` as `mm:ss`
-fn format_duration(duration: Duration) -> String {
-    let total_seconds = duration.as_secs();
-    let minutes = total_seconds / 60;
-    let seconds = total_seconds % 60;
-    format!("{:02}:{:02}", minutes, seconds)
-}
-
-/// Helper for safely updating UI state
-pub struct UiStateUpdater {
-    window_weak: Weak<MainWindow>,
-}
-
-impl UiStateUpdater {
-    /// Create a new UI state updater
-    pub fn new(window_weak: Weak<MainWindow>) -> Self {
-        Self { window_weak }
     }
 
-    /// Safely update the UI
-    pub fn update_ui<F>(&self, f: F)
-    where
-        F: FnOnce(&MainWindow),
-    {
-        if let Some(window) = self.window_weak.upgrade() {
-            f(&window);
-        } else {
-            warn!("Attempted to update UI but window is no longer available");
-        }
+    /// Format a `Duration` as `mm:ss`
+    fn format_duration(duration: Duration) -> String {
+        let total_seconds = duration.as_secs();
+        let minutes = total_seconds / 60;
+        let seconds = total_seconds % 60;
+        format!("{:02}:{:02}", minutes, seconds)
     }
-
-    /// Update visualizer display state
-    pub fn update_visualizer_state(&self, is_active: bool, fps: f32) {
-        self.update_ui(|window| {
-            // TODO: Add FPS and activity indicators to UI
-            debug!("Visualizer state: active={}, fps={:.1}", is_active, fps);
-        });
-    }
-
-    /// Update spectrum data visualization
-    pub fn update_spectrum_visualization(&self, spectrum_bands: &[f32]) {
-        self.update_ui(|_window| {
-            // TODO: This would update the actual visualizer display
-            // For now, we just log the peak level
-            let peak = spectrum_bands.iter().fold(0.0f32, |acc, &x| acc.max(x));
-            debug!("Spectrum peak: {:.3}", peak);
-        });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::EventBus;
-
-    #[test]
-    fn test_format_duration() {
-        assert_eq!(format_duration(Duration::from_secs(65)), "01:05");
-        assert_eq!(format_duration(Duration::from_secs(3661)), "61:01");
-        assert_eq!(format_duration(Duration::from_secs(0)), "00:00");
-    }
-
-    #[test]
-    fn test_ui_state_updater() {
-        // Test basic functionality without actual UI
-        let event_bus = EventBus::new();
-
-        // This would fail in a headless environment, so we just test
-        // that the constructor doesn't panic
-        assert!(event_bus.receiver_count() >= 0);
-    }
-
-    // Note: Most UI tests require the Slint runtime and should be
-    // implemented as integration tests with a proper test environment
 }

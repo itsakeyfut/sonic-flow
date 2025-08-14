@@ -36,6 +36,9 @@ pub enum AppEvent {
     MuteToggled,
 
     // Track events
+    /// Request to load a track (will open file dialog)
+    LoadTrackRequested,
+    
     /// Track was changed
     TrackChanged(TrackInfo),
 
