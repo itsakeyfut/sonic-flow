@@ -246,12 +246,7 @@ new-crate = "1.0"
 
 ## 📁 重要ファイル参照
 
-### 必読ドキュメント
-
-- `docs/ARCHITECTURE.md`: 詳細アーキテクチャ設計
-- `docs/SPECIFICATION.md`: 機能仕様書
-- `docs/DIRECTORY.md`: ディレクトリ構成ガイド
-- `docs/SYSTEM.md`: システム設計詳細
+src/内のファイル全てを確認してください。
 
 ### 実装優先度
 
