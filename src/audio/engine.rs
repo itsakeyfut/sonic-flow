@@ -119,6 +119,11 @@ struct AudioEngineWorker {
 impl AudioEngine {
     /// Create a new audio engine instance
     pub fn new() -> Result<Self, AudioError> {
+        Self::new_with_config(0.8, 1024, 44100)
+    }
+
+    /// Create a new audio engine instance with configuration
+    pub fn new_with_config(volume: f32, _buffer_size: usize, _sample_rate: u32) -> Result<Self, AudioError> {
         info!("Initializing audio engine");
 
         // Test audio system availability first

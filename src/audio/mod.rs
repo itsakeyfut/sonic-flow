@@ -8,6 +8,7 @@ pub mod decoder;
 pub mod effects;
 pub mod engine;
 pub mod metadata;
+pub mod player_manager;
 pub mod renderer;
 pub mod traits;
 
@@ -18,6 +19,8 @@ pub use traits::{
     AudioDecoder, AudioFormat, AudioFormatType, PlaybackControl, PlaybackState, PlaybackStatus,
     TrackLoader, VolumeControl,
 };
+
+
 
 // Re-export error types
 pub use crate::error::AudioError;
