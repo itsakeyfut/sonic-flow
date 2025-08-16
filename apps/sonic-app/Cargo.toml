@@ -1,0 +1,50 @@
+[package]
+name = "sonic-app"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Desktop application for Sonic Flow music player"
+
+# Default binary to run when using 'cargo run'
+default-run = "sonic-flow"
+
+[[bin]]
+name = "sonic-flow"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+sonic-core = { path = "../../libs/sonic-core" }
+sonic-ui = { path = "../../libs/sonic-ui", optional = true }
+sonic-visualizer = { path = "../../libs/sonic-visualizer" }
+
+# Async runtime
+tokio.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Utilities
+dirs.workspace = true
+anyhow.workspace = true
+hound.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = ["gui"]
+gui = ["sonic-ui"]
+console = []
+
+# Windows-specific: Hide console window in release builds
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }

@@ -54,7 +54,9 @@ cargo install sonic-flow
 
 ```bash
 # Run the application
-cargo run
+cargo run --bin sonic-flow   # GUI
+cargo run --bin sonic-cli    # CLI
+cargo run --bin basic-player # 基本的なプレイヤー例
 
 # Or run the release build
 ./target/release/sonic-flow

@@ -1,0 +1,24 @@
+[package]
+name = "basic-player"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "basic-player"
+path = "main.rs"
+
+[dependencies]
+sonic-core = { path = "../../libs/sonic-core" }
+sonic-ui = { path = "../../libs/sonic-ui" }
+sonic-visualizer = { path = "../../libs/sonic-visualizer" }
+
+# Async runtime
+tokio = { version = "1.47", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+anyhow = "1.0"

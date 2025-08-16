@@ -1,0 +1,361 @@
+//! Visualizer traits and plugin API
+//!
+//! This module defines the core traits for visualizer plugins and
+//! the unified interface for the visualizer system.
+
+use std::collections::HashMap;
+
+use sonic_core::audio::analysis::SpectrumData;
+use sonic_core::error::VisualizerError;
+
+/// Visualizer plugin trait
+///
+/// All visualizer implementations must implement this trait to be
+/// compatible with the Sonic Flow plugin system.
+pub trait Visualizer: Send + Sync {
+    /// Get visualizer metadata
+    fn metadata(&self) -> VisualizerMetadata;
+
+    /// Initialize the visualizer with configuration
+    fn initialize(&mut self, config: &VisualizationConfig) -> Result<(), VisualizerError>;
+
+    /// Update the visualizer with new spectrum data
+    fn update(&mut self, spectrum_data: &SpectrumData) -> Result<(), VisualizerError>;
+
+    /// Render the visualizer to a canvas
+    fn render(&self, canvas: &mut dyn Canvas) -> Result<(), VisualizerError>;
+
+    /// Configure the visualizer with new settings
+    fn configure(&mut self, settings: &HashMap<String, PluginValue>)
+        -> Result<(), VisualizerError>;
+
+    /// Reset the visualizer state
+    fn reset(&mut self);
+
+    /// Check if the visualizer supports real-time rendering
+    fn supports_realtime(&self) -> bool {
+        true
+    }
+
+    /// Get the preferred update rate (FPS)
+    fn preferred_update_rate(&self) -> u32 {
+        60
+    }
+}
+
+/// Visualizer metadata information
+#[derive(Debug, Clone)]
+pub struct VisualizerMetadata {
+    /// Unique identifier for the visualizer
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Version string
+    pub version: String,
+    /// Author information
+    pub author: String,
+    /// Description
+    pub description: String,
+    /// Configuration schema
+    pub config_schema: Vec<ConfigParameter>,
+}
+
+/// Visualization configuration
+#[derive(Debug, Clone)]
+pub struct VisualizationConfig {
+    /// Sensitivity multiplier (0.0 - 2.0)
+    pub sensitivity: f32,
+    /// Frequency range for analysis (Hz)
+    pub frequency_range: (f32, f32),
+    /// Color scheme
+    pub color_scheme: ColorScheme,
+    /// Animation speed multiplier
+    pub animation_speed: f32,
+    /// Enable smoothing
+    pub smoothing: bool,
+    /// Auto gain control
+    pub auto_gain: bool,
+    /// Custom parameters for specific visualizers
+    pub custom_params: HashMap<String, PluginValue>,
+}
+
+/// Color scheme for visualizers
+#[derive(Debug, Clone)]
+pub struct ColorScheme {
+    /// Primary color
+    pub primary: Color,
+    /// Secondary color
+    pub secondary: Color,
+    /// Background color
+    pub background: Color,
+    /// Gradient colors (from low to high intensity)
+    pub gradient: Vec<Color>,
+}
+
+/// RGBA color representation
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+/// Configuration parameter for plugin configuration
+#[derive(Debug, Clone)]
+pub struct ConfigParameter {
+    /// Parameter name
+    pub name: String,
+    /// Human-readable label
+    pub label: String,
+    /// Parameter type
+    pub param_type: ParameterType,
+    /// Default value
+    pub default_value: PluginValue,
+    /// Minimum value (for numeric types)
+    pub min_value: Option<PluginValue>,
+    /// Maximum value (for numeric types)
+    pub max_value: Option<PluginValue>,
+    /// Description
+    pub description: String,
+}
+
+/// Parameter types for configuration
+#[derive(Debug, Clone)]
+pub enum ParameterType {
+    Float,
+    Integer,
+    Boolean,
+    String,
+    Color,
+    Enum(Vec<String>),
+}
+
+/// Plugin configuration value
+#[derive(Debug, Clone, PartialEq)]
+pub enum PluginValue {
+    Float(f32),
+    Integer(i32),
+    Boolean(bool),
+    String(String),
+    Color(Color),
+}
+
+/// Canvas trait for rendering
+pub trait Canvas {
+    /// Get canvas dimensions
+    fn size(&self) -> (u32, u32);
+
+    /// Clear the canvas with a color
+    fn clear(&mut self, color: Color);
+
+    /// Draw a rectangle
+    fn draw_rect(&mut self, rect: Rect, color: Color);
+
+    /// Draw a line
+    fn draw_line(&mut self, start: Point, end: Point, color: Color, width: f32);
+
+    /// Draw a circle
+    fn draw_circle(&mut self, center: Point, radius: f32, color: Color);
+
+    /// Draw text
+    fn draw_text(&mut self, text: &str, position: Point, color: Color, size: f32);
+
+    /// Draw a polygon
+    fn draw_polygon(&mut self, points: &[Point], color: Color);
+
+    /// Set blend mode
+    fn set_blend_mode(&mut self, mode: BlendMode);
+}
+
+/// Rectangle definition
+#[derive(Debug, Clone, Copy)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Point definition
+#[derive(Debug, Clone, Copy)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// Blend modes for rendering
+#[derive(Debug, Clone, Copy)]
+pub enum BlendMode {
+    Normal,
+    Add,
+    Multiply,
+    Screen,
+}
+
+// Implementations
+
+impl Color {
+    /// Create a new RGBA color
+    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self { r, g, b, a }
+    }
+
+    /// Create a new RGB color with full opacity
+    pub fn rgb(r: f32, g: f32, b: f32) -> Self {
+        Self { r, g, b, a: 1.0 }
+    }
+
+    /// Create a grayscale color
+    pub fn gray(value: f32) -> Self {
+        Self::rgb(value, value, value)
+    }
+
+    /// Convert to 32-bit RGBA value
+    pub fn to_rgba32(&self) -> u32 {
+        let r = (self.r.clamp(0.0, 1.0) * 255.0) as u32;
+        let g = (self.g.clamp(0.0, 1.0) * 255.0) as u32;
+        let b = (self.b.clamp(0.0, 1.0) * 255.0) as u32;
+        let a = (self.a.clamp(0.0, 1.0) * 255.0) as u32;
+        (a << 24) | (r << 16) | (g << 8) | b
+    }
+
+    /// Create color from HSV values
+    pub fn from_hsv(h: f32, s: f32, v: f32) -> Self {
+        let h = h.rem_euclid(360.0);
+        let s = s.clamp(0.0, 1.0);
+        let v = v.clamp(0.0, 1.0);
+
+        let c = v * s;
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+        let m = v - c;
+
+        let (r, g, b) = match h as i32 / 60 {
+            0 => (c, x, 0.0),
+            1 => (x, c, 0.0),
+            2 => (0.0, c, x),
+            3 => (0.0, x, c),
+            4 => (x, 0.0, c),
+            _ => (c, 0.0, x),
+        };
+
+        Self::rgb(r + m, g + m, b + m)
+    }
+}
+
+impl Rect {
+    /// Create a new rectangle
+    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    /// Get the center point of the rectangle
+    pub fn center(&self) -> Point {
+        Point {
+            x: self.x + self.width / 2.0,
+            y: self.y + self.height / 2.0,
+        }
+    }
+
+    /// Check if a point is inside the rectangle
+    pub fn contains(&self, point: Point) -> bool {
+        point.x >= self.x
+            && point.x <= self.x + self.width
+            && point.y >= self.y
+            && point.y <= self.y + self.height
+    }
+}
+
+impl Point {
+    /// Create a new point
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+
+    /// Calculate distance to another point
+    pub fn distance_to(&self, other: Point) -> f32 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+impl Default for VisualizationConfig {
+    fn default() -> Self {
+        Self {
+            sensitivity: 1.0,
+            frequency_range: (20.0, 20000.0),
+            color_scheme: ColorScheme::default(),
+            animation_speed: 1.0,
+            smoothing: true,
+            auto_gain: true,
+            custom_params: HashMap::new(),
+        }
+    }
+}
+
+impl Default for ColorScheme {
+    fn default() -> Self {
+        Self {
+            primary: Color::rgb(0.58, 0.2, 0.91),     // Purple
+            secondary: Color::rgb(0.23, 0.51, 0.96),  // Blue
+            background: Color::rgb(0.07, 0.07, 0.07), // Dark gray
+            gradient: vec![
+                Color::rgb(0.0, 0.0, 0.5), // Dark blue
+                Color::rgb(0.0, 0.5, 1.0), // Blue
+                Color::rgb(0.0, 1.0, 1.0), // Cyan
+                Color::rgb(0.5, 1.0, 0.0), // Green-yellow
+                Color::rgb(1.0, 1.0, 0.0), // Yellow
+                Color::rgb(1.0, 0.5, 0.0), // Orange
+                Color::rgb(1.0, 0.0, 0.0), // Red
+            ],
+        }
+    }
+}
+
+impl From<f32> for PluginValue {
+    fn from(value: f32) -> Self {
+        PluginValue::Float(value)
+    }
+}
+
+impl From<i32> for PluginValue {
+    fn from(value: i32) -> Self {
+        PluginValue::Integer(value)
+    }
+}
+
+impl From<bool> for PluginValue {
+    fn from(value: bool) -> Self {
+        PluginValue::Boolean(value)
+    }
+}
+
+impl From<String> for PluginValue {
+    fn from(value: String) -> Self {
+        PluginValue::String(value)
+    }
+}
+
+impl From<&str> for PluginValue {
+    fn from(value: &str) -> Self {
+        PluginValue::String(value.to_string())
+    }
+}
+
+impl From<Color> for PluginValue {
+    fn from(value: Color) -> Self {
+        PluginValue::Color(value)
+    }
+}
+
+/// Type alias for visualizer factory function
+pub type VisualizerFactory = Box<dyn Fn() -> Box<dyn Visualizer> + Send + Sync>;
+
+/// Type alias for visualizer registry
+pub type VisualizerRegistry = std::collections::HashMap<String, VisualizerFactory>;
