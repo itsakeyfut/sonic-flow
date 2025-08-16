@@ -18,12 +18,12 @@
 //! ## Quick Start
 //!
 //! ```no_run
-//! use sonic_core::{AudioEngine, Result};
+//! use sonic_core::{AudioEngine, Result, PlaybackControl, TrackLoader};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let mut engine = AudioEngine::new().await?;
+//!     let mut engine = AudioEngine::new()?;
 //!     engine.load_track(Path::new("song.mp3")).await?;
 //!     engine.play().await?;
 //!     Ok(())
