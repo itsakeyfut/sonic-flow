@@ -8,11 +8,9 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use sonic_flow::{Result, SonicFlow};
+use sonic_flow::{Result, ui::EnhancedMainWindowBinding};
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-// slint::include_modules!();
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,23 +41,20 @@ async fn main() -> Result<()> {
 }
 
 async fn run_application() -> Result<()> {
-    // Create and initialize the main application
-    let player = SonicFlow::new().await?;
+    // Create enhanced main window binding with integrated audio support
+    let player = EnhancedMainWindowBinding::new()?;
 
     // Check for demo audio files and load one if available
     if let Some(demo_path) = find_demo_audio_file() {
         info!("Found demo audio file: {}", demo_path.display());
-
-        // Note: This would require the player to expose a method to load demo tracks
-        // For now, we just log that we found a demo file
-        warn!("Demo track loading not yet implemented in this interface");
+        info!("Demo track found - you can load it through the UI file dialog");
     } else {
         info!("No demo audio files found - user will need to load tracks manually");
         print_usage_instructions();
     }
 
     // Run the application
-    player.run().await?;
+    player.run()?;
 
     Ok(())
 }
@@ -110,32 +105,36 @@ fn find_demo_audio_file() -> Option<PathBuf> {
 
 /// Print usage instructions for the user
 fn print_usage_instructions() {
-    println!("\n=== Sonic Flow Audio Visualizer ===");
-    println!("🎵 Welcome to Sonic Flow - Advanced Audio Visualization");
+    println!("\n=== Sonic Flow Music Player ===");
+    println!("🎵 Welcome to Sonic Flow - High-Quality Audio Player with Visualizer");
     println!();
     println!("📁 To get started:");
-    println!("   1. Click the '📁' button in the player controls");
-    println!("   2. Load an audio file (MP3, FLAC, WAV, OGG supported)");
-    println!("   3. Press ▶ to start playback and see the visualizer");
+    println!("   1. Click the 'Load Track' button in the UI");
+    println!("   2. Select an audio file (MP3, FLAC, WAV, OGG supported)");
+    println!("   3. Press the Play button to start playback");
     println!();
-    println!("🎨 Visualizer Features:");
-    println!("   • Real-time spectrum analysis");
-    println!("   • Multiple visualization types (Spectrum Bars, Waveform, etc.)");
-    println!("   • Adjustable sensitivity");
-    println!("   • 60+ FPS smooth animation");
+    println!("🎨 Features:");
+    println!("   • High-quality audio playback");
+    println!("   • Real-time spectrum visualizer");
+    println!("   • Volume control and 10-second skip buttons");
+    println!("   • Track information display");
+    println!("   • Modern, responsive UI design");
     println!();
-    println!("🔧 Controls:");
-    println!("   • Space bar: Play/Pause");
-    println!("   • Left/Right arrows: Previous/Next track");
-    println!("   • Up/Down arrows: Volume control");
-    println!("   • Mouse: Click and drag on progress bar to seek");
+    println!("🔧 UI Controls:");
+    println!("   • Load Track: Select audio files");
+    println!("   • Play/Pause: Control playback");
+    println!("   • Stop: Stop current playback");
+    println!("   • Volume Slider: Adjust audio level");
+    println!("   • Skip buttons: Jump 10 seconds forward/backward");
     println!();
-    println!("💡 Tips:");
-    println!("   • Try different visualizer types to see various representations");
-    println!("   • Adjust sensitivity for better visualization of quiet tracks");
-    println!("   • Use high-quality audio files for best results");
+    println!("💡 Supported Formats:");
+    println!("   • MP3 (MPEG Audio Layer 3)");
+    println!("   • FLAC (Free Lossless Audio Codec)");
+    println!("   • WAV (Waveform Audio)");
+    println!("   • OGG (Ogg Vorbis)");
+    println!("   • M4A/AAC (Advanced Audio Coding)");
     println!();
-    println!("For demo purposes, you can place a file named 'demo.mp3' in:");
+    println!("For demo purposes, you can place audio files in:");
     if let Some(music_dir) = dirs::audio_dir() {
         println!("   • {}", music_dir.display());
     }
@@ -173,24 +172,11 @@ fn init_logging() -> Result<()> {
     // Add file logging in release mode
     #[cfg(not(debug_assertions))]
     let subscriber = {
-        use std::path::Path;
-        use tracing_appender::rolling::{RollingFileAppender, Rotation};
-
         if let Some(config_dir) = dirs::config_dir() {
             let log_dir = config_dir.join("sonic-flow").join("logs");
 
             if std::fs::create_dir_all(&log_dir).is_ok() {
-                let file_appender =
-                    RollingFileAppender::new(Rotation::daily(), log_dir, "sonic-flow.log");
-
-                let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-                subscriber.with(
-                    fmt::layer()
-                        .with_writer(non_blocking)
-                        .with_ansi(false)
-                        .json(),
-                )
+                subscriber // For now, just use console logging
             } else {
                 warn!("Failed to create log directory, using console only");
                 subscriber
