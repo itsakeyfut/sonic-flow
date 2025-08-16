@@ -181,6 +181,27 @@ impl MainWindowBinding {
             }
         });
 
+        // Skip controls - add new handlers for 10 second skip
+        self.window.on_skip_backward({
+            let event_bus = event_bus.clone();
+            move || {
+                debug!("Skip backward button clicked");
+                if let Err(e) = event_bus.publish(AppEvent::SeekRelative(-10.0)) {
+                    error!("Failed to publish skip backward event: {}", e);
+                }
+            }
+        });
+
+        self.window.on_skip_forward({
+            let event_bus = event_bus.clone();
+            move || {
+                debug!("Skip forward button clicked");
+                if let Err(e) = event_bus.publish(AppEvent::SeekRelative(10.0)) {
+                    error!("Failed to publish skip forward event: {}", e);
+                }
+            }
+        });
+
         debug!("UI event handlers setup completed");
         Ok(())
     }
@@ -201,11 +222,27 @@ impl MainWindowBinding {
         // Visualizer state
         self.window.set_visualizer_type("spectrum_bars".into());
         self.window.set_visualizer_sensitivity(1.0);
+        self.window.set_visualizer_smoothing(0.8);
+
+        // Playlist state
+        self.window.set_playlist_collapsed(false);
+        self.window.set_current_track_index(-1);
+        self.window.set_total_tracks(0);
+        self.window.set_total_duration("00:00".into());
 
         // Audio quality info
         self.window.set_file_format("".into());
         self.window.set_sample_rate("".into());
         self.window.set_bit_depth("".into());
+        self.window.set_bitrate("".into());
+        self.window.set_channels("".into());
+
+        // Track metadata
+        self.window.set_track_title("".into());
+        self.window.set_track_artist("".into());
+        self.window.set_track_album("".into());
+        self.window.set_track_year("".into());
+        self.window.set_track_genre("".into());
 
         debug!("Initial UI state set");
     }
@@ -254,6 +291,29 @@ impl MainWindowBinding {
         }
 
         debug!("Updated current track: {:?}", track_info.map(|t| &t.title));
+    }
+
+    /// Clear track metadata
+    pub fn clear_track_metadata(&self) {
+        self.window.set_track_title("".into());
+        self.window.set_track_artist("".into());
+        self.window.set_track_album("".into());
+        self.window.set_track_year("".into());
+        self.window.set_track_genre("".into());
+    }
+
+    /// Update audio quality information
+    pub fn update_audio_quality(&self, format: &str, sample_rate: u32, bit_depth: u16, bitrate: Option<u32>, channels: u16) {
+        self.window.set_file_format(format.into());
+        self.window.set_sample_rate(format!("{} Hz", sample_rate).into());
+        self.window.set_bit_depth(format!("{} bit", bit_depth).into());
+        self.window.set_channels(format!("{}", channels).into());
+        
+        if let Some(bitrate) = bitrate {
+            self.window.set_bitrate(format!("{} kbps", bitrate / 1000).into());
+        } else {
+            self.window.set_bitrate("Lossless".into());
+        }
     }
 
     /// Update volume in the UI
@@ -349,7 +409,7 @@ impl MainWindowBinding {
     /// Update all UI state from an audio engine status
     pub fn update_from_audio_status(&self, status: &crate::audio::engine::AudioEngineStatus) {
         use crate::audio::traits::PlaybackState;
-        
+
         // Update playback state
         let (is_playing, is_paused, state_text) = match status.state {
             PlaybackState::Playing => (true, false, "Playing"),

@@ -151,7 +151,7 @@ impl AppController {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use rfd::AsyncFileDialog;
-            
+
             let file = AsyncFileDialog::new()
                 .add_filter("Audio Files", &["mp3", "flac", "wav", "ogg", "m4a", "aac"])
                 .add_filter("MP3 Files", &["mp3"])
@@ -161,13 +161,15 @@ impl AppController {
                 .set_title("Select Audio File")
                 .pick_file()
                 .await;
-            
+
             Ok(file.map(|f| f.path().to_path_buf()))
         }
-        
+
         #[cfg(target_arch = "wasm32")]
         {
-            Err(Error::Application("File dialog not supported on WASM".to_string()))
+            Err(Error::Application(
+                "File dialog not supported on WASM".to_string(),
+            ))
         }
     }
 
@@ -205,7 +207,7 @@ impl AppController {
                     playback.volume = current_volume;
                     playback.is_muted = is_muted;
                     playback.current_track = current_track;
-                    
+
                     if let Some(dur) = duration {
                         playback.duration = dur.as_secs_f64();
                     }
@@ -278,40 +280,55 @@ impl AppController {
                 match event {
                     AppEvent::LoadTrackRequested => {
                         debug!("Load track requested, opening file dialog");
-                        
+
                         // Handle file dialog in a separate task
                         let audio_engine = Arc::clone(&audio_engine);
                         let event_bus = Arc::clone(&event_bus);
-                        
+
                         tokio::spawn(async move {
                             match Self::open_file_dialog().await {
                                 Ok(Some(path)) => {
                                     info!("Selected file: {}", path.display());
-                                    
+
                                     // Load track into audio engine
                                     match audio_engine.write().await.load_track(&path).await {
                                         Ok(track_id) => {
                                             info!("Track loaded successfully: {}", track_id);
-                                            
+
                                             // Set as current track
-                                            if let Err(e) = audio_engine.write().await.set_current_track(track_id).await {
+                                            if let Err(e) = audio_engine
+                                                .write()
+                                                .await
+                                                .set_current_track(track_id)
+                                                .await
+                                            {
                                                 error!("Failed to set current track: {}", e);
                                                 return;
                                             }
-                                            
+
                                             // Get track info and publish event
-                                            if let Some(track_info) = audio_engine.read().await.get_track_info(track_id) {
-                                                let app_track_info = crate::app::events::TrackInfo {
-                                                    id: track_info.id,
-                                                    title: track_info.title.clone(),
-                                                    artist: track_info.artist.clone(),
-                                                    album: track_info.album.clone(),
-                                                    duration: track_info.duration.unwrap_or(std::time::Duration::ZERO),
-                                                    file_path: track_info.path.clone(),
-                                                };
-                                                
-                                                if let Err(e) = event_bus.publish(AppEvent::TrackChanged(app_track_info)) {
-                                                    error!("Failed to publish track changed event: {}", e);
+                                            if let Some(track_info) =
+                                                audio_engine.read().await.get_track_info(track_id)
+                                            {
+                                                let app_track_info =
+                                                    crate::app::events::TrackInfo {
+                                                        id: track_info.id,
+                                                        title: track_info.title.clone(),
+                                                        artist: track_info.artist.clone(),
+                                                        album: track_info.album.clone(),
+                                                        duration: track_info
+                                                            .duration
+                                                            .unwrap_or(std::time::Duration::ZERO),
+                                                        file_path: track_info.path.clone(),
+                                                    };
+
+                                                if let Err(e) = event_bus
+                                                    .publish(AppEvent::TrackChanged(app_track_info))
+                                                {
+                                                    error!(
+                                                        "Failed to publish track changed event: {}",
+                                                        e
+                                                    );
                                                 }
                                             }
                                         }
@@ -401,9 +418,12 @@ impl AppController {
 
                     AppEvent::PlaybackPositionChanged(position) => {
                         let mut engine = audio_engine.write().await;
-                        let duration = engine.duration().unwrap_or(std::time::Duration::from_secs(300));
-                        let seek_duration = std::time::Duration::from_secs_f64(position * duration.as_secs_f64());
-                        
+                        let duration = engine
+                            .duration()
+                            .unwrap_or(std::time::Duration::from_secs(300));
+                        let seek_duration =
+                            std::time::Duration::from_secs_f64(position * duration.as_secs_f64());
+
                         if let Err(e) = engine.seek(seek_duration).await {
                             error!("Failed to seek: {}", e);
                         } else {

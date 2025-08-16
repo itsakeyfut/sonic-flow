@@ -129,7 +129,10 @@ impl AudioEngine {
             }
             Err(e) => {
                 error!("Audio system test failed: {}", e);
-                return Err(AudioError::Device(format!("Audio system not available: {}", e)));
+                return Err(AudioError::Device(format!(
+                    "Audio system not available: {}",
+                    e
+                )));
             }
         }
 
@@ -163,7 +166,7 @@ impl AudioEngine {
         // Spawn the audio processing thread as std::thread instead of tokio::spawn
         let audio_thread = std::thread::spawn(move || {
             debug!("Audio worker thread started");
-            
+
             // Create a new Tokio runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -217,12 +220,10 @@ impl AudioEngine {
 
     /// Send a command to the audio engine worker
     async fn send_command(&self, command: AudioCommand) -> Result<(), AudioError> {
-        self.command_sender
-            .send(command)
-            .map_err(|e| {
-                error!("Failed to send command to audio engine: {}", e);
-                AudioError::Device("Audio engine not available".to_string())
-            })
+        self.command_sender.send(command).map_err(|e| {
+            error!("Failed to send command to audio engine: {}", e);
+            AudioError::Device("Audio engine not available".to_string())
+        })
     }
 
     /// Send a command and wait for a response

@@ -29,16 +29,28 @@ pub enum AppEvent {
     /// Seek to position (0.0 - 1.0 range)
     PlaybackPositionChanged(f64),
 
+    /// Seek relative to current position (in seconds)
+    SeekRelative(f64),
+
     /// Volume changed (0.0 - 1.0)
     VolumeChanged(f32),
 
     /// Mute state changed
     MuteToggled,
 
+    /// Shuffle mode toggled
+    ShuffleToggled,
+
+    /// Repeat mode toggled
+    RepeatToggled,
+
     // Track events
     /// Request to load a track (will open file dialog)
     LoadTrackRequested,
-    
+
+    /// Request to load a folder
+    LoadFolderRequested,
+
     /// Track was changed
     TrackChanged(TrackInfo),
 
@@ -60,6 +72,15 @@ pub enum AppEvent {
         sensitivity: f32,
         color_scheme: String,
     },
+
+    /// Visualizer sensitivity changed
+    VisualizerSensitivityChanged(f32),
+
+    /// Visualizer smoothing changed
+    VisualizerSmoothingChanged(f32),
+
+    /// Visualizer preset selected
+    VisualizerPresetSelected(String),
 
     // UI events
     /// Window was resized
@@ -105,6 +126,21 @@ pub enum AppEvent {
         playlist_id: PlaylistId,
         track_id: TrackId,
     },
+
+    /// Playlist visibility toggled (collapsed/expanded)
+    PlaylistToggleCollapsed,
+
+    /// Playlist track selected
+    PlaylistTrackSelected(usize),
+
+    /// Playlist track removed
+    PlaylistTrackRemoved(usize),
+
+    /// Playlist cleared
+    PlaylistCleared,
+
+    /// Save current playlist
+    PlaylistSaveRequested,
 
     // System events
     /// Application error occurred
