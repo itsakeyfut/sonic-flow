@@ -59,6 +59,9 @@ pub mod visualizer;
 // Infrastructure modules
 pub mod plugin;
 
+// Testing and development modules
+pub mod simple_player;
+
 // Type aliases for commonly used types
 pub use chrono::{DateTime, Utc};
 pub use uuid::Uuid;

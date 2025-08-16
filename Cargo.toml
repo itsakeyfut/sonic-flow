@@ -131,6 +131,14 @@ debug = true
 # name = "audio_processing"
 # harness = false
 
+[[example]]
+name = "simple_mp3_player"
+path = "examples/simple_mp3_player.rs"
+
+
+
+
+
 [workspace]
 # members = ["plugins/*"]
 
