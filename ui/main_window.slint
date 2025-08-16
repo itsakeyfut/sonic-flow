@@ -1,526 +1,16 @@
-import { Button, HorizontalBox, VerticalBox, Slider, ListView, 
-         ScrollView, LineEdit, ComboBox, GridBox } from "std-widgets.slint";
-
-// カラーテーマ定義
-global ColorTheme {
-    // ダークテーマ
-    in-out property <color> background: #121212;
-    in-out property <color> surface: #1e1e1e;
-    in-out property <color> surface-variant: #2a2a2a;
-    in-out property <color> primary: #9333ea;
-    in-out property <color> secondary: #3b82f6;
-    in-out property <color> accent: #22c55e;
-    in-out property <color> text-primary: #ffffff;
-    in-out property <color> text-secondary: #9ca3af;
-    in-out property <color> border: #374151;
-    in-out property <color> error: #ef4444;
-    
-    // サイズ定義
-    in-out property <length> border-radius: 8px;
-    in-out property <length> spacing: 16px;
-    in-out property <length> panel-padding: 20px;
-}
-
-// プレイヤーコントロール
-component PlayerControls inherits Rectangle {
-    // プロパティ
-    in-out property <bool> is-playing: false;
-    in-out property <bool> is-paused: false;
-    in-out property <float> volume: 0.8;
-    in-out property <float> progress: 0.0;
-    in-out property <string> position-text: "0:00";
-    in-out property <string> duration-text: "0:00";
-    
-    // コールバック
-    callback play-pause-clicked();
-    callback stop-clicked();
-    callback next-track();
-    callback previous-track();
-    callback volume-changed(float);
-    callback seek(float);
-    callback load-track-clicked();
-    
-    background: ColorTheme.surface;
-    border-radius: ColorTheme.border-radius;
-    height: 80px;
-    
-    HorizontalBox {
-        padding: ColorTheme.panel-padding;
-        spacing: ColorTheme.spacing;
-        
-        HorizontalBox {
-            // ファイル読み込みボタン
-            Button {
-                text: "📁";
-                width: 40px;
-                height: 40px;
-                clicked => { root.load-track-clicked(); }
-            }
-        }
-        
-        // 再生コントロールボタン
-        HorizontalBox {
-            spacing: 8px;
-            width: 200px;
-            
-            // 前のトラック
-            Button {
-                text: "⏮";
-                width: 40px;
-                height: 40px;
-                clicked => { root.previous-track(); }
-            }
-            
-            // 再生/一時停止
-            Button {
-                text: root.is-playing ? "⏸" : "▶";
-                width: 40px;
-                height: 40px;
-                clicked => { root.play-pause-clicked(); }
-            }
-            
-            // 停止
-            Button {
-                text: "⏹";
-                width: 40px;
-                height: 40px;
-                clicked => { root.stop-clicked(); }
-            }
-            
-            // 次のトラック
-            Button {
-                text: "⏭";
-                width: 40px;
-                height: 40px;
-                clicked => { root.next-track(); }
-            }
-        }
-        
-        // プログレスバーと時間表示
-        VerticalBox {
-            spacing: 4px;
-            
-            // プログレスバー
-            progress-bar := Slider {
-                height: 20px;
-                minimum: 0.0;
-                maximum: 1.0;
-                value: root.progress;
-                changed(value) => { root.seek(value); }
-            }
-            
-            // 時間表示
-            HorizontalBox {
-                Text {
-                    text: root.position-text;
-                    color: ColorTheme.text-secondary;
-                    font-size: 12px;
-                }
-                
-                Rectangle { horizontal-stretch: 1; }
-                
-                Text {
-                    text: root.duration-text;
-                    color: ColorTheme.text-secondary;
-                    font-size: 12px;
-                }
-            }
-        }
-        
-        // 音量コントロール
-        HorizontalBox {
-            spacing: 8px;
-            width: 150px;
-            
-            Text {
-                text: "🔊";
-                width: 20px;
-                vertical-alignment: center;
-            }
-            
-            volume-slider := Slider {
-                height: 20px;
-                minimum: 0.0;
-                maximum: 1.0;
-                value: root.volume;
-                changed(value) => { root.volume-changed(value); }
-            }
-            
-            Text {
-                text: Math.round(root.volume * 100) + "%";
-                color: ColorTheme.text-secondary;
-                font-size: 12px;
-                width: 30px;
-                vertical-alignment: center;
-            }
-        }
-    }
-}
-
-// ビジュアライザーキャンバス
-component VisualizerCanvas inherits Rectangle {
-    in-out property <string> visualizer-type: "spectrum_bars";
-    in-out property <bool> is-playing: false;
-    in-out property <float> sensitivity: 1.0;
-    
-    // コールバック
-    callback visualizer-changed(string);
-    callback sensitivity-changed(float);
-    callback fullscreen-toggled();
-    
-    background: ColorTheme.background;
-    border-radius: ColorTheme.border-radius;
-    border-width: 1px;
-    border-color: ColorTheme.border;
-    
-    VerticalBox {
-        padding: ColorTheme.panel-padding;
-        spacing: ColorTheme.spacing;
-        
-        // ビジュアライザー制御パネル
-        HorizontalBox {
-            spacing: 10px;
-            height: 40px;
-
-            Text {
-                text: "Visualizer:";
-                color: ColorTheme.text-primary;
-                vertical-alignment: center;
-                font-weight: 600;
-            }
-            
-            visualizer-combo := ComboBox {
-                width: 150px;
-                model: ["Spectrum Bars", "Waveform", "Circle Spectrum", "Particle System", "3D Spectrum", "VU Meters"];
-                current-value: "Spectrum Bars";
-                selected(value) => { 
-                    root.visualizer-changed(value);
-                }
-            }
-            
-            Rectangle { width: 20px; }
-
-            Text {
-                text: "Sensitivity:";
-                color: ColorTheme.text-primary;
-                vertical-alignment: center;
-            }
-
-            sensitivity-slider := Slider {
-                width: 100px;
-                minimum: 0.1;
-                maximum: 2.0;
-                value: root.sensitivity;
-                changed(value) => { root.sensitivity-changed(value); }
-            }
-
-            Text {
-                text: Math.round(root.sensitivity * 100) + "%";
-                color: ColorTheme.text-secondary;
-                font-size: 12px;
-                width: 40px;
-                vertical-alignment: center;
-            }
-
-            Rectangle { horizontal-stretch: 1; }
-            
-            // フルスクリーンボタン
-            Button {
-                text: "⛶";
-                width: 40px;
-                height: 30px;
-                clicked => { root.fullscreen-toggled(); }
-            }
-        }
-        
-        // ビジュアライザー表示エリア
-        visualizer-area := Rectangle {
-            background: #000000;
-            border-radius: 4px;
-            min-height: 300px;
-            
-            // ビジュアライザーの状態表示
-            VerticalBox {
-                alignment: center;
-                spacing: 10px;
-                
-                if root.is-playing: Text {
-                    text: "🎵 " + root.visualizer-type;
-                    color: ColorTheme.primary;
-                    horizontal-alignment: center;
-                    font-size: 18px;
-                    font-weight: 600;
-                }
-                if !root.is-playing: Text {
-                    text: "▶ Play music to see visualization";
-                    color: ColorTheme.text-secondary;
-                    horizontal-alignment: center;
-                    font-size: 16px;
-                }
-
-                // リアルタイムビジュアライザー（プレースホルダー）
-                if root.is-playing: Rectangle {
-                    height: 200px;
-                    background: @linear-gradient(90deg, ColorTheme.primary, ColorTheme.secondary);
-                    opacity: 0.3;
-                    
-                    // ダミーのバーアニメーション
-                    HorizontalBox {
-                        spacing: 2px;
-                        padding: 10px;
-                        
-                        for i in 32: Rectangle {
-                            background: ColorTheme.accent;
-                            width: 6px;
-                            height: 20px + (i * 5px);
-                            opacity: 0.7 + (Math.sin(i * 0.3rad) * 0.3);
-                        }
-                    }
-                }
-            }
-        }
-
-        // ビジュアライザー情報パネル
-        HorizontalBox {
-            height: 30px;
-            spacing: 10px;
-
-            Text {
-                text: "Status:";
-                color: ColorTheme.text-secondary;
-                font-size: 12px;
-                vertical-alignment: center;
-            }
-
-            status-indicator := Rectangle {
-                width: 10px;
-                height: 10px;
-                border-radius: 5px;
-                background: root.is-playing ? ColorTheme.accent : ColorTheme.text-secondary;
-            }
-
-            Text {
-                text: root.is-playing ? "Active" : "Inactive";
-                color: root.is-playing ? ColorTheme.accent : ColorTheme.text-secondary;
-                font-size: 12px;
-                vertical-alignment: center;
-                font-weight: 500;
-            }
-
-            Rectangle { horizontal-stretch: 1; }
-
-            Text {
-                text: "FPS: 60";
-                color: ColorTheme.text-secondary;
-                font-size: 12px;
-                vertical-alignment: center;
-            }
-        }
-    }
-}
-
-// 現在再生中の情報
-component NowPlayingInfo inherits Rectangle {
-    in-out property <string> current-track: "No track loaded";
-    in-out property <string> playback-state: "Stopped";
-    in-out property <string> file-format: "";
-    in-out property <string> sample-rate: "";
-    in-out property <string> bit-depth: "";
-    
-    background: ColorTheme.surface;
-    border-radius: ColorTheme.border-radius;
-    
-    VerticalBox {
-        padding: ColorTheme.panel-padding;
-        spacing: 10px;
-        
-        Text {
-            text: "Now Playing";
-            color: ColorTheme.text-primary;
-            font-weight: 700;
-            font-size: 16px;
-        }
-
-        ScrollView {
-            height: 60px;
-            Text {
-                text: root.current-track;
-                color: ColorTheme.text-primary;
-                font-size: 14px;
-                wrap: word-wrap;
-            }
-        }
-        
-        Rectangle {
-            height: 1px;
-            background: ColorTheme.border;
-        }
-        
-        HorizontalBox {
-            spacing: 8px;
-
-            Rectangle {
-                width: 8px;
-                height: 8px;
-                border-radius: 4px;
-                background: root.playback-state == "Playing" ? ColorTheme.accent :
-                            root.playback-state == "Paused" ? ColorTheme.secondary : ColorTheme.text-secondary;
-            }
-
-            Text {
-                text: root.playback-state;
-                color: ColorTheme.text-primary;
-                font-size: 12px;
-                font-weight: 500;
-                vertical-alignment: center;
-            }
-        }
-
-        // 音量情報
-        if root.file-format != "": VerticalBox {
-            spacing: 4px;
-
-            Text {
-                text: "Audio Quality";
-                color: ColorTheme.text-secondary;
-                font-size: 11px;
-                font-weight: 600;
-            }
-
-            Text {
-                text: "Format: " + root.file-format;
-                color: ColorTheme.text-secondary;
-                font-size: 10px;
-            }
-
-            if root.sample-rate != "": Text {
-                text: "Sample Rate: " + root.sample-rate;
-                color: ColorTheme.text-secondary;
-                font-size: 10px;
-            }
-
-            if root.bit-depth != "": Text {
-                text: "Bit Depth: " + root.bit-depth;
-                color: ColorTheme.text-secondary;
-                font-size: 10px;
-            }
-        }
-
-        Rectangle { vertical-stretch: 1; }
-
-        // TODO: アルバムアートワーク
-        Rectangle {
-            height: 150px;
-            background: ColorTheme.surface-variant;
-            border-radius: 4px;
-            
-            Text {
-                text: "♫";
-                color: ColorTheme.text-secondary;
-                font-size: 48px;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-    }
-}
-
-// ライブラリブラウザー（シンプル版）
-component LibraryBrowser inherits Rectangle {
-    background: ColorTheme.surface;
-    border-radius: ColorTheme.border-radius;
-    
-    VerticalBox {
-        padding: ColorTheme.panel-padding;
-        spacing: ColorTheme.spacing;
-        
-        HorizontalBox {
-            Text {
-                text: "Quick Actions";
-                color: ColorTheme.text-primary;
-                font-weight: 700;
-                font-size: 16px;
-            }
-            
-            Rectangle { horizontal-stretch: 1; }
-        }
-        
-        // クイックアクション
-        VerticalBox {
-            spacing: 8px;
-            
-            Button {
-                text: "📁 Load Audio File";
-                height: 40px;
-            }
-            
-            Button {
-                text: "🎵 Demo Track";
-                height: 40px;
-            }
-            
-            Button {
-                text: "🔍 Browse Library";
-                height: 40px;
-                enabled: false;
-            }
-        }
-        
-        Rectangle {
-            height: 1px;
-            background: ColorTheme.border;
-        }
-        
-        Text {
-            text: "Recent Files";
-            color: ColorTheme.text-primary;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        // 最近のファイル（プレースホルダー）
-        ScrollView {
-            height: 200px;
-            
-            VerticalBox {
-                spacing: 4px;
-                
-                for i in 5: Rectangle {
-                    height: 30px;
-                    background: Math.mod(i, 2) == 0 ? ColorTheme.surface-variant : transparent;
-                    border-radius: 4px;
-                    
-                    HorizontalBox {
-                        padding: 8px;
-                        
-                        Text {
-                            text: "Sample Track " + (i + 1) + ".mp3";
-                            color: ColorTheme.text-secondary;
-                            vertical-alignment: center;
-                            font-size: 12px;
-                        }
-                        
-                        Rectangle { horizontal-stretch: 1; }
-                        
-                        Text {
-                            text: "3:45";
-                            color: ColorTheme.text-secondary;
-                            font-size: 11px;
-                            vertical-alignment: center;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { ColorTheme } from "components/common.slint";
+import { PlayerControls } from "components/player_controls.slint";
+import { VisualizerCanvas } from "components/visualizer_canvas.slint";
+import { NowPlayingInfo } from "components/track_info.slint";
+import { PlaylistView } from "components/playlist_view.slint";
 
 // メインウィンドウ
 export component MainWindow inherits Window {
     // ウィンドウプロパティ
     title: "Sonic Flow - Audio Visualizer";
-    width: 1200px;
-    height: 800px;
+    width: 1400px;
+    height: 900px;
     background: ColorTheme.background;
     
     // プレイヤー状態
@@ -530,40 +20,90 @@ export component MainWindow inherits Window {
     in-out property <string> playback-state: "Stopped";
     in-out property <float> volume: 0.8;
     in-out property <float> progress: 0.0;
-    in-out property <string> position-text: "0:00";
-    in-out property <string> duration-text: "0:00";
+    in-out property <string> position-text: "00:00";
+    in-out property <string> duration-text: "00:00";
     in-out property <string> visualizer-type: "spectrum_bars";
     in-out property <float> visualizer-sensitivity: 1.0;
+    in-out property <float> visualizer-smoothing: 0.8;
 
     // 音質情報
     in-out property <string> file-format: "";
     in-out property <string> sample-rate: "";
     in-out property <string> bit-depth: "";
+    in-out property <string> bitrate: "";
+    in-out property <string> channels: "";
+    
+    // トラックメタデータ
+    in-out property <string> track-title: "";
+    in-out property <string> track-artist: "";
+    in-out property <string> track-album: "";
+    in-out property <string> track-year: "";
+    in-out property <string> track-genre: "";
+    in-out property <image> album-artwork: @image-url("");
+    
+    // プレイリスト状態
+    in-out property <bool> playlist-collapsed: false;
+    in-out property <int> current-track-index: -1;
+    in-out property <int> total-tracks: 5;
+    in-out property <string> total-duration: "19:49";
 
-    // コールバック
+    // コールバック - プレイヤー制御
     callback play-pause-clicked();
     callback stop-clicked();
     callback next-track();
     callback previous-track();
+    callback skip-backward();
+    callback skip-forward();
     callback volume-changed(float);
     callback seek(float);
+    callback load-track-clicked();
+    callback shuffle-toggled();
+    callback repeat-toggled();
+    
+    // コールバック - ビジュアライザー
     callback visualizer-changed(string);
     callback visualizer-sensitivity-changed(float);
-    callback load-track-clicked();
+    callback visualizer-smoothing-changed(float);
     callback fullscreen-toggled();
+    callback visualizer-preset-selected(string);
+    
+    // コールバック - プレイリスト
+    callback playlist-toggle-collapsed();
+    callback playlist-track-selected(int);
+    callback playlist-track-removed(int);
+    callback playlist-clear();
+    callback playlist-load-folder();
+    callback playlist-load-files();
+    callback playlist-save();
+    callback playlist-folder-selected(string);
+    callback playlist-file-selected(string);
     
     VerticalBox {
-        padding: 16px;
-        spacing: 16px;
+        padding: 20px;
+        spacing: 20px;
         
         // メインコンテンツエリア
         HorizontalBox {
-            spacing: 16px;
+            spacing: 20px;
             horizontal-stretch: 1;
             
-            // 左パネル - ライブラリブラウザー
-            LibraryBrowser {
-                width: 250px;
+            // 左パネル - プレイリスト（折りたたみ可能）
+            PlaylistView {
+                is-collapsed: root.playlist-collapsed;
+                current-track-index: root.current-track-index;
+                is-playing: root.is-playing;
+                total-tracks: root.total-tracks;
+                total-duration: root.total-duration;
+                
+                toggle-collapsed => { root.playlist-toggle-collapsed(); }
+                track-selected(index) => { root.playlist-track-selected(index); }
+                track-removed(index) => { root.playlist-track-removed(index); }
+                clear-playlist => { root.playlist-clear(); }
+                load-folder => { root.playlist-load-folder(); }
+                load-files => { root.playlist-load-files(); }
+                save-playlist => { root.playlist-save(); }
+                folder-selected(path) => { root.playlist-folder-selected(path); }
+                file-selected(path) => { root.playlist-file-selected(path); }
             }
             
             // 中央パネル - ビジュアライザー
@@ -572,23 +112,40 @@ export component MainWindow inherits Window {
                 visualizer-type: root.visualizer-type;
                 is-playing: root.is-playing;
                 sensitivity: root.visualizer-sensitivity;
+                smoothing: root.visualizer-smoothing;
+                
                 visualizer-changed(type) => { root.visualizer-changed(type); }
                 sensitivity-changed(value) => { root.visualizer-sensitivity-changed(value); }
+                smoothing-changed(value) => { root.visualizer-smoothing-changed(value); }
                 fullscreen-toggled => { root.fullscreen-toggled(); }
+                preset-selected(preset) => { root.visualizer-preset-selected(preset); }
             }
             
             // 右パネル - 現在再生中の情報
             NowPlayingInfo {
-                width: 250px;
+                width: 280px;
                 current-track: root.current-track;
                 playback-state: root.playback-state;
+                is-playing: root.is-playing;
+                
+                // メタデータ
+                title: root.track-title;
+                artist: root.track-artist;
+                album: root.track-album;
+                year: root.track-year;
+                genre: root.track-genre;
+                album-artwork: root.album-artwork;
+                
+                // オーディオ品質
                 file-format: root.file-format;
                 sample-rate: root.sample-rate;
                 bit-depth: root.bit-depth;
+                bitrate: root.bitrate;
+                channels: root.channels;
             }
         }
 
-        // コントロールバー
+        // 下部コントロールバー
         PlayerControls {
             is-playing: root.is-playing;
             is-paused: root.is-paused;
@@ -601,9 +158,13 @@ export component MainWindow inherits Window {
             stop-clicked => { root.stop-clicked(); }
             next-track => { root.next-track(); }
             previous-track => { root.previous-track(); }
+            skip-backward => { root.skip-backward(); }
+            skip-forward => { root.skip-forward(); }
             volume-changed(vol) => { root.volume-changed(vol); }
             seek(pos) => { root.seek(pos); }
             load-track-clicked => { root.load-track-clicked(); }
+            shuffle-toggled => { root.shuffle-toggled(); }
+            repeat-toggled => { root.repeat-toggled(); }
         }
     }
 }
