@@ -3,8 +3,11 @@
 //! Slint-based UI implementations with Rust integration
 
 pub mod bindings;
+pub mod audio_integration;
+pub mod enhanced_binding;
 
 pub use bindings::MainWindowBinding;
+pub use enhanced_binding::EnhancedMainWindowBinding;
 
 use crate::error::{Result, UiError};
 

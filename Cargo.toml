@@ -135,6 +135,10 @@ debug = true
 name = "simple_mp3_player"
 path = "examples/simple_mp3_player.rs"
 
+[[example]]
+name = "integrated_music_player"
+path = "examples/integrated_music_player.rs"
+
 
 
 
