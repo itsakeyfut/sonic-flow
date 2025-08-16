@@ -1,0 +1,137 @@
+// 共通スタイルとテーマ定義
+import { Button, HorizontalBox, VerticalBox, Slider } from "std-widgets.slint";
+
+// カラーテーマ定義
+export global ColorTheme {
+    // ダークテーマ（音圧ビジュアライザーに適した色合い）
+    in-out property <color> background: #0a0a0a;
+    in-out property <color> surface: #141414;
+    in-out property <color> surface-variant: #1e1e1e;
+    in-out property <color> surface-elevated: #252525;
+    
+    // プライマリカラー（サイバー調）
+    in-out property <color> primary: #00d4ff;
+    in-out property <color> primary-variant: #0099cc;
+    in-out property <color> secondary: #7c3aed;
+    in-out property <color> accent: #22d3ee;
+    in-out property <color> accent-bright: #06b6d4;
+    
+    // ビジュアライザー専用カラー
+    in-out property <color> visualizer-bg: #000000;
+    in-out property <color> spectrum-gradient-start: #00d4ff;
+    in-out property <color> spectrum-gradient-mid: #7c3aed;
+    in-out property <color> spectrum-gradient-end: #ec4899;
+    in-out property <color> waveform-color: #22d3ee;
+    in-out property <color> particle-color: #fbbf24;
+    
+    // テキストカラー
+    in-out property <color> text-primary: #ffffff;
+    in-out property <color> text-secondary: #a1a1aa;
+    in-out property <color> text-muted: #71717a;
+    
+    // インタラクション用カラー
+    in-out property <color> border: #27272a;
+    in-out property <color> border-active: #3f3f46;
+    in-out property <color> success: #10b981;
+    in-out property <color> warning: #f59e0b;
+    in-out property <color> error: #ef4444;
+    
+    // サイズ・レイアウト定義
+    in-out property <length> border-radius: 12px;
+    in-out property <length> border-radius-small: 6px;
+    in-out property <length> spacing: 16px;
+    in-out property <length> spacing-small: 8px;
+    in-out property <length> panel-padding: 24px;
+    in-out property <length> panel-padding-small: 16px;
+    
+    // フォント設定
+    in-out property <length> font-size-large: 18px;
+    in-out property <length> font-size-normal: 14px;
+    in-out property <length> font-size-small: 12px;
+    in-out property <length> font-size-tiny: 10px;
+    
+    // アニメーション設定
+    in-out property <duration> animation-fast: 150ms;
+    in-out property <duration> animation-normal: 250ms;
+    in-out property <duration> animation-slow: 400ms;
+}
+
+// 共通ボタンスタイル
+export component StyledButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <color> button-color: ColorTheme.primary;
+    callback clicked;
+    
+    width: 40px;
+    height: 40px;
+    border-radius: ColorTheme.border-radius-small;
+    background: mouse-area.pressed ? button-color.darker(0.3) : 
+                mouse-area.has-hover ? button-color.brighter(0.2) : button-color;
+    border-width: 1px;
+    border-color: button-color.brighter(0.1);
+    
+    animate background { duration: ColorTheme.animation-fast; }
+    
+    mouse-area := TouchArea {
+        enabled: parent.enabled;
+        clicked => { root.clicked(); }
+    }
+    
+    Text {
+        text: root.text;
+        color: ColorTheme.text-primary;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: 16px;
+        font-weight: 600;
+    }
+}
+
+// グロー効果付きテキスト
+export component GlowText inherits Text {
+    in property <color> glow-color: ColorTheme.primary;
+    in property <bool> glow-active: false;
+    
+    color: glow-active ? glow-color : ColorTheme.text-primary;
+    font-weight: 600;
+    
+    animate color { duration: ColorTheme.animation-normal; }
+}
+
+// パネルコンテナ
+export component Panel inherits Rectangle {
+    in property <bool> elevated: false;
+    
+    background: elevated ? ColorTheme.surface-elevated : ColorTheme.surface;
+    border-radius: ColorTheme.border-radius;
+    border-width: 1px;
+    border-color: ColorTheme.border;
+    
+    // サブトルなドロップシャドウ効果
+    drop-shadow-blur: elevated ? 20px : 0px;
+    drop-shadow-color: #00000040;
+    drop-shadow-offset-y: elevated ? 4px : 0px;
+}
+
+// プログレスインジケーター
+export component ProgressIndicator inherits Rectangle {
+    in property <float> progress: 0.0; // 0.0 to 1.0
+    in property <color> indicator-color: ColorTheme.primary;
+    
+    height: 4px;
+    background: ColorTheme.surface-variant;
+    border-radius: 2px;
+    
+    Rectangle {
+        width: parent.width * root.progress;
+        height: parent.height;
+        background: @linear-gradient(90deg, 
+            indicator-color, 
+            indicator-color.brighter(0.3)
+        );
+        border-radius: parent.border-radius;
+        
+        animate width { duration: ColorTheme.animation-normal; }
+    }
+}

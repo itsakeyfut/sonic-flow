@@ -1,0 +1,448 @@
+import { Button, HorizontalBox, VerticalBox, ComboBox, Slider } from "std-widgets.slint";
+import { ColorTheme, StyledButton, GlowText, Panel, ProgressIndicator } from "common.slint";
+
+// スペクトラムバー（単体バー）
+component SpectrumBar inherits Rectangle {
+    in property <float> height-ratio: 0.0; // 0.0 to 1.0
+    in property <color> bar-color: ColorTheme.spectrum-gradient-start;
+    in property <int> bar-index: 0;
+    
+    width: 8px;
+    background: ColorTheme.visualizer-bg;
+    
+    // バーの描画
+    Rectangle {
+        width: parent.width - 2px;
+        height: parent.height * root.height-ratio;
+        x: 1px;
+        y: parent.height - self.height;
+        background: @linear-gradient(180deg,
+            root.bar-color.brighter(0.4),
+            root.bar-color,
+            root.bar-color.darker(0.3)
+        );
+        border-radius: 2px;
+        
+        // グロー効果
+        drop-shadow-blur: 8px;
+        drop-shadow-color: root.bar-color;
+        drop-shadow-offset-y: 0px;
+        
+        animate height { duration: 50ms; }
+    }
+    
+    // ピークインジケーター
+    if root.height-ratio > 0.8: Rectangle {
+        width: parent.width;
+        height: 2px;
+        y: parent.height * (1.0 - root.height-ratio) - 2px;
+        background: ColorTheme.text-primary;
+        border-radius: 1px;
+        
+        animate y { duration: 100ms; }
+    }
+}
+
+// 円形スペクトラム（サンプル）
+component CircularSpectrum inherits Rectangle {
+    in property <bool> is-playing: false;
+    in property <[float]> spectrum-data: [];
+    
+    property <angle> rotation: 0deg;
+    
+    // 中央の円
+    Rectangle {
+        width: Math.min(parent.width, parent.height) * 0.3;
+        height: self.width;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: self.width / 2;
+        border-width: 3px;
+        border-color: ColorTheme.primary;
+        background: ColorTheme.visualizer-bg;
+        
+        // 内側のグロー
+        drop-shadow-blur: 20px;
+        drop-shadow-color: ColorTheme.primary;
+        drop-shadow-offset-y: 0px;
+        
+        // 中央テキスト
+        GlowText {
+            text: "SONIC\nFLOW";
+            color: ColorTheme.primary;
+            font-size: 16px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            glow-active: true;
+        }
+    }
+    
+    // 外側のリング
+    for i in 64: Rectangle {
+        property <angle> angle: (i * 360deg / 64) + root.rotation;
+        property <length> radius: Math.min(parent.width, parent.height) * 0.4;
+        property <length> bar-height: (i < spectrum-data.length ? spectrum-data[i] : 0.0) * 80px;
+        
+        width: 4px;
+        height: bar-height;
+        x: parent.width / 2 + radius * Math.cos(angle) - self.width / 2;
+        y: parent.height / 2 + radius * Math.sin(angle) - bar-height / 2;
+        background: @linear-gradient(180deg,
+            ColorTheme.spectrum-gradient-start,
+            ColorTheme.spectrum-gradient-mid,
+            ColorTheme.spectrum-gradient-end
+        );
+        border-radius: 2px;
+        
+        animate height { duration: 80ms; }
+    }
+    
+    states [
+        playing when root.is-playing: {
+            rotation: 360deg;
+        }
+    ]
+    
+    animate rotation { duration: 5s; }
+}
+
+// 波形ビジュアライザー
+component WaveformVisualizer inherits Rectangle {
+    in property <[float]> waveform-data: [];
+    
+    // 簡単化された波形表示
+    HorizontalBox {
+        spacing: 2px;
+        padding: 20px;
+        
+        for i in 50: Rectangle {
+            width: 6px;
+            height: 20px + (Math.sin(i * 0.3rad) * 60px);
+            background: ColorTheme.waveform-color;
+            border-radius: 3px;
+            y: (parent.height - self.height) / 2;
+            
+            animate height { duration: 100ms; }
+        }
+    }
+}
+
+// メインビジュアライザーキャンバス
+export component VisualizerCanvas inherits Panel {
+    in-out property <string> visualizer-type: "spectrum_bars";
+    in-out property <bool> is-playing: false;
+    in-out property <float> sensitivity: 1.0;
+    in-out property <float> smoothing: 0.8;
+    in-out property <[float]> spectrum-data: [
+        0.1, 0.2, 0.15, 0.3, 0.25, 0.4, 0.35, 0.5, 0.45, 0.6, 0.55, 0.7, 0.65, 0.8, 0.75, 0.9,
+        0.85, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.08, 0.12, 0.18, 0.25, 0.35, 0.45, 0.55
+    ];
+    
+    // コールバック
+    callback visualizer-changed(string);
+    callback sensitivity-changed(float);
+    callback smoothing-changed(float);
+    callback fullscreen-toggled();
+    callback preset-selected(string);
+    
+    elevated: true;
+    
+    VerticalBox {
+        padding: ColorTheme.panel-padding;
+        spacing: ColorTheme.spacing;
+        
+        // ビジュアライザー制御パネル
+        HorizontalBox {
+            spacing: ColorTheme.spacing;
+            height: 45px;
+
+            GlowText {
+                text: "Visualizer";
+                color: ColorTheme.text-primary;
+                font-size: ColorTheme.font-size-large;
+                font-weight: 700;
+                vertical-alignment: center;
+                glow-active: root.is-playing;
+                glow-color: ColorTheme.primary;
+            }
+            
+            visualizer-combo := ComboBox {
+                width: 180px;
+                model: ["Spectrum Bars", "Waveform", "Circle Spectrum", "Particle System", "3D Spectrum", "VU Meters", "Oscilloscope"];
+                current-value: "Spectrum Bars";
+                selected(value) => { 
+                    root.visualizer-changed(value);
+                }
+            }
+            
+            Rectangle { width: 20px; }
+
+            // 設定コントロール
+            VerticalBox {
+                spacing: 4px;
+                width: 200px;
+                
+                HorizontalBox {
+                    spacing: ColorTheme.spacing-small;
+                    
+                    GlowText {
+                        text: "Sensitivity";
+                        color: ColorTheme.text-secondary;
+                        font-size: ColorTheme.font-size-small;
+                        width: 70px;
+                        vertical-alignment: center;
+                    }
+
+                    sensitivity-slider := Slider {
+                        width: 80px;
+                        minimum: 0.1;
+                        maximum: 3.0;
+                        value: root.sensitivity;
+                        changed(value) => { root.sensitivity-changed(value); }
+                    }
+
+                    GlowText {
+                        text: Math.round(root.sensitivity * 100) + "%";
+                        color: ColorTheme.text-muted;
+                        font-size: ColorTheme.font-size-tiny;
+                        width: 35px;
+                        vertical-alignment: center;
+                    }
+                }
+                
+                HorizontalBox {
+                    spacing: ColorTheme.spacing-small;
+                    
+                    GlowText {
+                        text: "Smoothing";
+                        color: ColorTheme.text-secondary;
+                        font-size: ColorTheme.font-size-small;
+                        width: 70px;
+                        vertical-alignment: center;
+                    }
+
+                    smoothing-slider := Slider {
+                        width: 80px;
+                        minimum: 0.0;
+                        maximum: 1.0;
+                        value: root.smoothing;
+                        changed(value) => { root.smoothing-changed(value); }
+                    }
+
+                    GlowText {
+                        text: Math.round(root.smoothing * 100) + "%";
+                        color: ColorTheme.text-muted;
+                        font-size: ColorTheme.font-size-tiny;
+                        width: 35px;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+            
+            // プリセット選択
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                
+                StyledButton {
+                    text: "🎨";
+                    width: 35px;
+                    height: 35px;
+                    button-color: ColorTheme.secondary;
+                    clicked => { root.preset-selected("colorful"); }
+                }
+                
+                StyledButton {
+                    text: "⚡";
+                    width: 35px;
+                    height: 35px;
+                    button-color: ColorTheme.accent;
+                    clicked => { root.preset-selected("energetic"); }
+                }
+                
+                StyledButton {
+                    text: "⛶";
+                    width: 35px;
+                    height: 35px;
+                    button-color: ColorTheme.primary;
+                    clicked => { root.fullscreen-toggled(); }
+                }
+            }
+        }
+        
+        // メインビジュアライザー表示エリア
+        visualizer-area := Rectangle {
+            background: ColorTheme.visualizer-bg;
+            border-radius: ColorTheme.border-radius;
+            border-width: 2px;
+            border-color: root.is-playing ? ColorTheme.primary : ColorTheme.border;
+            min-height: 350px;
+            
+            animate border-color { duration: ColorTheme.animation-normal; }
+            
+            // ビジュアライザーコンテンツ
+            if root.visualizer-type == "Spectrum Bars": Rectangle {
+                padding: 20px;
+                
+                if root.is-playing: HorizontalBox {
+                    spacing: 2px;
+                    alignment: center;
+                    
+                    for i in 32: SpectrumBar {
+                        height-ratio: i < spectrum-data.length ? spectrum-data[i] * root.sensitivity : 0.0;
+                        bar-color: i < 11 ? ColorTheme.spectrum-gradient-start :
+                                  i < 22 ? ColorTheme.spectrum-gradient-mid :
+                                  ColorTheme.spectrum-gradient-end;
+                        bar-index: i;
+                    }
+                }
+                
+                if !root.is-playing: VerticalBox {
+                    alignment: center;
+                    spacing: 20px;
+                    
+                    GlowText {
+                        text: "♫";
+                        font-size: 72px;
+                        color: ColorTheme.text-muted;
+                        horizontal-alignment: center;
+                    }
+                    
+                    GlowText {
+                        text: "Play music to see visualization";
+                        color: ColorTheme.text-secondary;
+                        font-size: ColorTheme.font-size-large;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            
+            if root.visualizer-type == "Circle Spectrum": CircularSpectrum {
+                is-playing: root.is-playing;
+                spectrum-data: root.spectrum-data;
+            }
+            
+            if root.visualizer-type == "Waveform": WaveformVisualizer {
+                waveform-data: root.spectrum-data;
+            }
+            
+            // その他のビジュアライザータイプのプレースホルダー
+            if root.visualizer-type != "Spectrum Bars" && 
+               root.visualizer-type != "Circle Spectrum" && 
+               root.visualizer-type != "Waveform": VerticalBox {
+                alignment: center;
+                spacing: 20px;
+                
+                GlowText {
+                    text: root.visualizer-type;
+                    font-size: 24px;
+                    color: ColorTheme.primary;
+                    horizontal-alignment: center;
+                    glow-active: true;
+                }
+                
+                GlowText {
+                    text: "Coming Soon";
+                    color: ColorTheme.text-secondary;
+                    font-size: ColorTheme.font-size-normal;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // ビジュアライザー情報・統計パネル
+        HorizontalBox {
+            height: 35px;
+            spacing: ColorTheme.spacing;
+
+            // ステータス表示
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                
+                GlowText {
+                    text: "Status:";
+                    color: ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-small;
+                    vertical-alignment: center;
+                }
+
+                Rectangle {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 6px;
+                    background: root.is-playing ? ColorTheme.success : ColorTheme.text-muted;
+                    
+                    animate background { duration: ColorTheme.animation-normal; }
+                }
+
+                GlowText {
+                    text: root.is-playing ? "Active" : "Inactive";
+                    color: root.is-playing ? ColorTheme.success : ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-small;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    glow-active: root.is-playing;
+                    glow-color: ColorTheme.success;
+                }
+            }
+            
+            Rectangle { width: 20px; }
+            
+            // パフォーマンス情報
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                
+                GlowText {
+                    text: "FPS: 60";
+                    color: ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-small;
+                    vertical-alignment: center;
+                }
+                
+                GlowText {
+                    text: "•";
+                    color: ColorTheme.border;
+                    font-size: ColorTheme.font-size-small;
+                    vertical-alignment: center;
+                }
+                
+                GlowText {
+                    text: "Latency: < 10ms";
+                    color: ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-small;
+                    vertical-alignment: center;
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            // 品質インジケーター
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                
+                GlowText {
+                    text: "Quality:";
+                    color: ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-small;
+                    vertical-alignment: center;
+                }
+                
+                ProgressIndicator {
+                    width: 60px;
+                    height: 6px;
+                    progress: root.is-playing ? 0.85 : 0.0;
+                    indicator-color: ColorTheme.primary;
+                }
+                
+                GlowText {
+                    text: "85%";
+                    color: ColorTheme.text-muted;
+                    font-size: ColorTheme.font-size-tiny;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
