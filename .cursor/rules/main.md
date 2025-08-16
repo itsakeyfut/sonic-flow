@@ -18,6 +18,44 @@ Sonic Flow is a high-quality music player with advanced audio visualization capa
 - **Architecture**: Layered architecture (UI/App/Business/Infrastructure)
 - **Async Runtime**: tokio with multi-thread runtime
 
+## 📚 External References
+
+Always reference these official documentations for accurate implementation:
+
+### Core Technologies
+
+- **Rust Language**: https://doc.rust-lang.org/
+- **Rust API Guidelines**: https://rust-lang.github.io/api-guidelines/
+- **Tokio Documentation**: https://docs.rs/tokio/latest/tokio/
+- **Slint Documentation**: https://slint.dev/releases/1.8/docs/rust/slint/
+- **Slint Language Reference**: https://slint.dev/releases/1.8/docs/slint/
+
+### Audio Processing
+
+- **Symphonia Documentation**: https://docs.rs/symphonia/latest/symphonia/
+- **CPAL Documentation**: https://docs.rs/cpal/latest/cpal/
+- **RustFFT Documentation**: https://docs.rs/rustfft/latest/rustfft/
+
+### Data & Storage
+
+- **SQLx Documentation**: https://docs.rs/sqlx/latest/sqlx/
+- **Serde Documentation**: https://docs.rs/serde/latest/serde/
+- **TOML Documentation**: https://docs.rs/toml/latest/toml/
+
+### Error Handling & Utilities
+
+- **Thiserror Documentation**: https://docs.rs/thiserror/latest/thiserror/
+- **Anyhow Documentation**: https://docs.rs/anyhow/latest/anyhow/
+- **Tracing Documentation**: https://docs.rs/tracing/latest/tracing/
+
+### Testing & Benchmarking
+
+- **Criterion Documentation**: https://docs.rs/criterion/latest/criterion/
+- **Proptest Documentation**: https://docs.rs/proptest/latest/proptest/
+- **Mockall Documentation**: https://docs.rs/mockall/latest/mockall/
+
+**IMPORTANT**: When implementing features, always check the latest documentation for API changes and best practices.
+
 ## Documentation References
 
 For comprehensive development guidance, reference:
@@ -100,16 +138,18 @@ src/
 
 ## Development Workflow
 
-1. **Check project context**: Reference CLAUDE.md for project guidelines
-2. **Review relevant rules**: Use appropriate .cursor/rules/ file for domain-specific guidance
-3. **Search project knowledge**: Access detailed specifications and existing implementations
-4. **Follow commit strategy**: Apply git workflow from git.md
-5. **Ensure quality**: Meet all performance requirements and coding standards
+1. **Check external docs**: Reference relevant official documentation
+2. **Check project context**: Reference CLAUDE.md for project guidelines
+3. **Review relevant rules**: Use appropriate .cursor/rules/ file for domain-specific guidance
+4. **Search project knowledge**: Access detailed specifications and existing implementations
+5. **Follow commit strategy**: Apply git workflow from git.md
+6. **Ensure quality**: Meet all performance requirements and coding standards
 
 ## When in Doubt
 
-1. Reference CLAUDE.md for overall project guidance
-2. Check relevant .cursor/rules/ files for specific domain guidance
-3. Use project knowledge search for implementation details
-4. Follow Rust community best practices
-5. Prioritize code clarity and real-time performance
+1. Check official documentation for the relevant technology
+2. Reference CLAUDE.md for overall project guidance
+3. Check relevant .cursor/rules/ files for specific domain guidance
+4. Use project knowledge search for implementation details
+5. Follow Rust community best practices and API guidelines
+6. Prioritize code clarity and real-time performance

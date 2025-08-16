@@ -1,5 +1,15 @@
 # Sonic Flow - Performance Optimization Rules
 
+## 📚 Performance References
+
+- **Rust Performance Book**: https://nnethercote.github.io/perf-book/
+- **Tokio Performance**: https://tokio.rs/tokio/topics/performance
+- **RustFFT Documentation**: https://docs.rs/rustfft/latest/rustfft/
+- **CPAL Documentation**: https://docs.rs/cpal/latest/cpal/
+- **Crossbeam Documentation**: https://docs.rs/crossbeam/latest/crossbeam/
+- **Rayon Documentation**: https://docs.rs/rayon/latest/rayon/
+- **Criterion Benchmarking**: https://bheisler.github.io/criterion.rs/book/
+
 ## Critical Performance Requirements
 
 ### Non-Negotiable Targets

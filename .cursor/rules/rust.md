@@ -1,5 +1,15 @@
 # Sonic Flow - Rust Code Standards
 
+## 📚 Rust References
+
+- **Rust Book**: https://doc.rust-lang.org/book/
+- **Rust Reference**: https://doc.rust-lang.org/reference/
+- **Rust API Guidelines**: https://rust-lang.github.io/api-guidelines/
+- **Rust Standard Library**: https://doc.rust-lang.org/std/
+- **Rustonomicon**: https://doc.rust-lang.org/nomicon/
+- **Async Book**: https://rust-lang.github.io/async-book/
+- **Tokio Tutorial**: https://tokio.rs/tokio/tutorial
+
 ## Core Rust Guidelines
 
 ### Error Handling (Mandatory)

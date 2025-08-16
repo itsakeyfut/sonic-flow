@@ -1,5 +1,14 @@
 # Sonic Flow - Configuration Management
 
+## 📚 Configuration References
+
+- **Config Crate**: https://docs.rs/config/latest/config/
+- **Serde Documentation**: https://docs.rs/serde/latest/serde/
+- **TOML Documentation**: https://docs.rs/toml/latest/toml/
+- **Directories Crate**: https://docs.rs/dirs/latest/dirs/
+- **Notify Crate (File Watching)**: https://docs.rs/notify/latest/notify/
+- **Rust Configuration Patterns**: https://rust-lang.github.io/api-guidelines/flexibility.html
+
 ## Configuration Structure
 
 ### Hierarchical Configuration System

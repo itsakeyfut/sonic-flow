@@ -1,5 +1,13 @@
 # Sonic Flow - UI Development Rules (Slint)
 
+## 📚 Slint References
+
+- **Slint Documentation**: https://slint.dev/releases/1.8/docs/
+- **Slint Rust API**: https://slint.dev/releases/1.8/docs/rust/slint/
+- **Slint Language Reference**: https://slint.dev/releases/1.8/docs/slint/
+- **Slint Tutorial**: https://slint.dev/releases/1.8/docs/tutorial/
+- **Slint Examples**: https://github.com/slint-ui/slint/tree/master/examples
+
 ## Slint Framework Guidelines
 
 ### Component Structure

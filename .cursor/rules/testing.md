@@ -1,5 +1,14 @@
 # Sonic Flow - Testing Standards
 
+## 📚 Testing References
+
+- **Rust Testing Guide**: https://doc.rust-lang.org/book/ch11-00-testing.html
+- **Criterion Documentation**: https://docs.rs/criterion/latest/criterion/
+- **Proptest Guide**: https://proptest-rs.github.io/proptest/intro.html
+- **Mockall Documentation**: https://docs.rs/mockall/latest/mockall/
+- **Tokio Testing**: https://docs.rs/tokio-test/latest/tokio_test/
+- **Rust Test Organization**: https://doc.rust-lang.org/book/ch11-03-test-organization.html
+
 ## Testing Philosophy
 
 ### Coverage Requirements
