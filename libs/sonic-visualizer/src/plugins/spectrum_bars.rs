@@ -127,6 +127,12 @@ impl SpectrumBarsVisualizer {
 
     /// Create logarithmic frequency mapping
     fn create_log_frequency_mapping(&mut self, spectrum_size: usize) {
+        // Handle empty spectrum case
+        if spectrum_size == 0 {
+            self.frequency_bins = vec![0; self.config.bar_count];
+            return;
+        }
+
         let (min_freq, max_freq) = self.vis_config.frequency_range;
         let log_min = min_freq.ln();
         let log_max = max_freq.ln();
@@ -144,6 +150,12 @@ impl SpectrumBarsVisualizer {
 
     /// Create linear frequency mapping
     fn create_linear_frequency_mapping(&mut self, spectrum_size: usize) {
+        // Handle empty spectrum case
+        if spectrum_size == 0 {
+            self.frequency_bins = vec![0; self.config.bar_count];
+            return;
+        }
+
         let (min_freq, max_freq) = self.vis_config.frequency_range;
         let freq_step = (max_freq - min_freq) / self.config.bar_count as f32;
 
@@ -704,7 +716,7 @@ impl Visualizer for SpectrumBarsVisualizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::visualizer::canvas::SoftwareCanvas;
+    use crate::canvas::SoftwareCanvas;
 
     #[test]
     fn test_spectrum_bars_creation() {
@@ -799,7 +811,7 @@ mod tests {
 
         // Test gradient interpolation
         let color_start = visualizer.interpolate_gradient_color(0.0);
-        let color_mid = visualizer.interpolate_gradient_color(0.5);
+        let _color_mid = visualizer.interpolate_gradient_color(0.5);
         let color_end = visualizer.interpolate_gradient_color(1.0);
 
         // Should get different colors
