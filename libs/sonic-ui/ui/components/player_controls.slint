@@ -1,0 +1,299 @@
+import { Button, HorizontalBox, VerticalBox, Slider } from "std-widgets.slint";
+import { ColorTheme, StyledButton, GlowText, Panel } from "common.slint";
+
+// プレイヤーコントロール
+export component PlayerControls inherits Panel {
+    // プロパティ
+    in-out property <bool> is-playing: false;
+    in-out property <bool> is-paused: false;
+    in-out property <float> volume: 0.8;
+    in-out property <float> progress: 0.0;
+    in-out property <string> position-text: "00:00";
+    in-out property <string> duration-text: "00:00";
+    
+    // コールバック
+    callback play-pause-clicked();
+    callback stop-clicked();
+    callback next-track();
+    callback previous-track();
+    callback skip-backward();  // 10秒戻す
+    callback skip-forward();   // 10秒進む
+    callback volume-changed(float);
+    callback seek(float);
+    callback load-track-clicked();
+    callback shuffle-toggled();
+    callback repeat-toggled();
+    
+    height: 90px;
+    elevated: true;
+    
+    HorizontalBox {
+        padding: ColorTheme.panel-padding;
+        spacing: ColorTheme.spacing;
+        
+        // ファイル操作とプレイリスト
+        VerticalBox {
+            width: 120px;
+            spacing: ColorTheme.spacing-small;
+            
+            StyledButton {
+                text: "📁";
+                width: 50px;
+                height: 35px;
+                button-color: ColorTheme.accent;
+                clicked => { root.load-track-clicked(); }
+            }
+            
+            HorizontalBox {
+                spacing: 4px;
+                StyledButton {
+                    text: "🔀";
+                    width: 30px;
+                    height: 25px;
+                    button-color: ColorTheme.secondary;
+                    clicked => { root.shuffle-toggled(); }
+                }
+                StyledButton {
+                    text: "🔁";
+                    width: 30px;
+                    height: 25px;
+                    button-color: ColorTheme.secondary;
+                    clicked => { root.repeat-toggled(); }
+                }
+            }
+        }
+        
+        // メイン再生コントロール
+        VerticalBox {
+            horizontal-stretch: 1;
+            spacing: ColorTheme.spacing-small;
+            
+            // 上段：スキップとメイン再生ボタン
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                alignment: center;
+                
+                // 10秒戻す
+                StyledButton {
+                    text: "↺10";
+                    width: 45px;
+                    height: 40px;
+                    button-color: ColorTheme.primary-variant;
+                    clicked => { root.skip-backward(); }
+                }
+                
+                // 前のトラック
+                StyledButton {
+                    text: "⏮";
+                    width: 45px;
+                    height: 40px;
+                    clicked => { root.previous-track(); }
+                }
+                
+                // 再生/一時停止（大きめ）
+                StyledButton {
+                    text: root.is-playing ? "⏸" : "▶";
+                    width: 60px;
+                    height: 50px;
+                    button-color: root.is-playing ? ColorTheme.warning : ColorTheme.success;
+                    clicked => { root.play-pause-clicked(); }
+                }
+                
+                // 停止
+                StyledButton {
+                    text: "⏹";
+                    width: 45px;
+                    height: 40px;
+                    button-color: ColorTheme.error;
+                    clicked => { root.stop-clicked(); }
+                }
+                
+                // 次のトラック
+                StyledButton {
+                    text: "⏭";
+                    width: 45px;
+                    height: 40px;
+                    clicked => { root.next-track(); }
+                }
+                
+                // 10秒進む
+                StyledButton {
+                    text: "↻10";
+                    width: 45px;
+                    height: 40px;
+                    button-color: ColorTheme.primary-variant;
+                    clicked => { root.skip-forward(); }
+                }
+            }
+            
+            // 下段：プログレスバーと時間表示
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                
+                GlowText {
+                    text: root.position-text;
+                    color: ColorTheme.text-secondary;
+                    font-size: ColorTheme.font-size-small;
+                    width: 45px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                
+                // カスタムプログレスバー
+                Rectangle {
+                    horizontal-stretch: 1;
+                    height: 24px;
+                    background: ColorTheme.surface-variant;
+                    border-radius: 12px;
+                    border-width: 1px;
+                    border-color: ColorTheme.border;
+                    
+                    // プログレス背景
+                    Rectangle {
+                        width: parent.width * root.progress;
+                        height: parent.height - 4px;
+                        y: 2px;
+                        x: 2px;
+                        background: @linear-gradient(90deg, 
+                            ColorTheme.spectrum-gradient-start,
+                            ColorTheme.spectrum-gradient-mid,
+                            ColorTheme.spectrum-gradient-end
+                        );
+                        border-radius: 10px;
+                        
+                        animate width { duration: ColorTheme.animation-fast; }
+                    }
+                    
+                    // インタラクション用
+                    TouchArea {
+                        clicked => {
+                            if (self.pressed-x >= 0 && self.pressed-x <= parent.width) {
+                                root.seek(self.pressed-x / parent.width);
+                            }
+                        }
+                    }
+                }
+                
+                GlowText {
+                    text: root.duration-text;
+                    color: ColorTheme.text-secondary;
+                    font-size: ColorTheme.font-size-small;
+                    width: 45px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        
+        // 音量コントロール
+        VerticalBox {
+            width: 180px;
+            spacing: ColorTheme.spacing-small;
+            alignment: center;
+            
+            HorizontalBox {
+                spacing: ColorTheme.spacing-small;
+                alignment: center;
+                
+                GlowText {
+                    text: "🔊";
+                    width: 25px;
+                    glow-active: root.volume > 0.5;
+                    glow-color: ColorTheme.accent;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                
+                // カスタム音量スライダー
+                Rectangle {
+                    width: 100px;
+                    height: 20px;
+                    background: ColorTheme.surface-variant;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: ColorTheme.border;
+                    
+                    // 音量レベル表示
+                    Rectangle {
+                        width: parent.width * root.volume;
+                        height: parent.height - 4px;
+                        y: 2px;
+                        x: 2px;
+                        background: @linear-gradient(90deg, 
+                            ColorTheme.success,
+                            root.volume > 0.7 ? ColorTheme.warning : ColorTheme.success
+                        );
+                        border-radius: 8px;
+                        
+                        animate width { duration: ColorTheme.animation-fast; }
+                    }
+                    
+                    // ドラッグ用ハンドル
+                    Rectangle {
+                        x: (parent.width - self.width) * root.volume;
+                        y: (parent.height - self.height) / 2;
+                        width: 16px;
+                        height: 16px;
+                        background: ColorTheme.text-primary;
+                        border-radius: 8px;
+                        border-width: 2px;
+                        border-color: ColorTheme.primary;
+                        
+                        animate x { duration: ColorTheme.animation-fast; }
+                    }
+                    
+                    TouchArea {
+                        property <bool> dragging: false;
+                        
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                self.dragging = true;
+                            } else if (event.kind == PointerEventKind.up) {
+                                self.dragging = false;
+                            }
+                        }
+                        
+                        moved => {
+                            if (self.dragging && self.pressed-x >= 0 && self.pressed-x <= parent.width) {
+                                root.volume-changed(self.pressed-x / parent.width);
+                            }
+                        }
+                        
+                        clicked => {
+                            if (self.pressed-x >= 0 && self.pressed-x <= parent.width) {
+                                root.volume-changed(self.pressed-x / parent.width);
+                            }
+                        }
+                    }
+                }
+                
+                GlowText {
+                    text: Math.round(root.volume * 100) + "%";
+                    color: ColorTheme.text-secondary;
+                    font-size: ColorTheme.font-size-small;
+                    width: 35px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            
+            // ボリューム状態インジケーター
+            Rectangle {
+                height: 3px;
+                width: 120px;
+                background: ColorTheme.surface-variant;
+                border-radius: 1px;
+                
+                Rectangle {
+                    width: parent.width * root.volume;
+                    height: parent.height;
+                    background: root.volume > 0.8 ? ColorTheme.error : 
+                              root.volume > 0.5 ? ColorTheme.warning : ColorTheme.success;
+                    border-radius: parent.border-radius;
+                    
+                    animate width { duration: ColorTheme.animation-fast; }
+                }
+            }
+        }
+    }
+}
