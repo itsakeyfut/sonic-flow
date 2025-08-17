@@ -100,13 +100,11 @@ impl GPURenderer {
     pub async fn initialize_pipeline(&mut self) -> Result<(), GPURenderingError> {
         info!("Initializing rendering pipeline");
 
-        // TODO: Implement proper surface cloning when needed
-        // For now, return an error indicating surface cloning is not implemented
+        // TODO: Implement proper surface sharing when needed
+        // For now, return an error indicating surface sharing is not implemented
         return Err(GPURenderingError::PipelineCreation(
-            "Surface cloning not implemented yet".to_string()
+            "Surface sharing not implemented yet".to_string()
         ));
-
-        Ok(())
     }
 
     /// Load and compile a shader

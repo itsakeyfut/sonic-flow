@@ -9,6 +9,7 @@ use wgpu::{
     MultisampleState, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, Queue,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, Surface, SurfaceConfiguration,
     TextureView, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    Adapter,
 };
 
 use crate::types::{
@@ -44,26 +45,41 @@ pub struct RenderingPipeline {
 
 impl RenderingPipeline {
     /// Create a new rendering pipeline
-    pub async fn new(surface: Surface<'static>, device: Device, queue: Queue) -> Result<Self, GPURenderingError> {
+    pub async fn new(
+        surface: Surface<'static>, 
+        device: Device, 
+        queue: Queue,
+        adapter: &Adapter,
+    ) -> Result<Self, GPURenderingError> {
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
-        // TODO: Configure surface properly when adapter is available
-        // For now, use default configuration
+        // Get surface capabilities
+        let surface_caps = surface.get_capabilities(adapter);
+        
+        // Choose surface format
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
+
+        // Configure surface
         let surface_config = SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            format: surface_format,
             width: 800,
             height: 600,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
 
         surface.configure(&device, &surface_config);
 
-        info!("Created rendering pipeline with default surface format");
+        info!("Created rendering pipeline with surface format: {:?}", surface_format);
 
         Ok(Self {
             device,
@@ -374,8 +390,13 @@ impl RenderingPipeline {
 
 impl ShaderCanvas {
     /// Create a new shader canvas
-    pub async fn new(surface: Surface<'static>, device: Device, queue: Queue) -> Result<Self, GPURenderingError> {
-        let pipeline = RenderingPipeline::new(surface, device, queue).await?;
+    pub async fn new(
+        surface: Surface<'static>, 
+        device: Device, 
+        queue: Queue,
+        adapter: &Adapter,
+    ) -> Result<Self, GPURenderingError> {
+        let pipeline = RenderingPipeline::new(surface, device, queue, adapter).await?;
         
         Ok(Self {
             width: pipeline.size().0,
