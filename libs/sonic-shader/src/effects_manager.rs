@@ -5,6 +5,7 @@ use tracing::{debug, info};
 use crate::{
     AudioVisualizationBridge,
     types::{GPURenderingError, BlendMode},
+    performance::{PerformanceMonitor, PerformanceMetrics, PerformanceThresholds},
 };
 
 /// Effect types available for visualization
@@ -36,6 +37,8 @@ pub struct EffectConfig {
     pub blend_mode: BlendMode,
     /// Enabled state
     pub enabled: bool,
+    /// Performance impact estimate (1-10, higher = more expensive)
+    pub performance_impact: u8,
 }
 
 impl EffectConfig {
@@ -56,6 +59,7 @@ impl EffectConfig {
             parameters: HashMap::new(),
             blend_mode: BlendMode::Normal,
             enabled: true,
+            performance_impact: 5, // Default medium impact
         }
     }
 
@@ -67,6 +71,11 @@ impl EffectConfig {
     /// Get a parameter value
     pub fn get_parameter(&self, name: &str) -> Option<f32> {
         self.parameters.get(name).copied()
+    }
+
+    /// Set performance impact
+    pub fn set_performance_impact(&mut self, impact: u8) {
+        self.performance_impact = impact.min(10);
     }
 }
 
@@ -80,6 +89,10 @@ pub struct EffectsManager {
     active_effect: Option<String>,
     /// Effect transition state
     transition_state: TransitionState,
+    /// Performance monitor
+    performance_monitor: PerformanceMonitor,
+    /// Performance monitoring enabled
+    performance_monitoring_enabled: bool,
 }
 
 /// Transition state for smooth effect switching
@@ -140,53 +153,80 @@ impl EffectsManager {
             effects: HashMap::new(),
             active_effect: None,
             transition_state: TransitionState::new(),
+            performance_monitor: PerformanceMonitor::new(300), // Store 300 frames
+            performance_monitoring_enabled: true,
         }
+    }
+
+    /// Enable or disable performance monitoring
+    pub fn set_performance_monitoring(&mut self, enabled: bool) {
+        self.performance_monitoring_enabled = enabled;
+        info!("Performance monitoring {}", if enabled { "enabled" } else { "disabled" });
+    }
+
+    /// Get performance monitor reference
+    pub fn performance_monitor(&self) -> &PerformanceMonitor {
+        &self.performance_monitor
+    }
+
+    /// Get mutable performance monitor reference
+    pub fn performance_monitor_mut(&mut self) -> &mut PerformanceMonitor {
+        &mut self.performance_monitor
+    }
+
+    /// Update performance thresholds
+    pub fn update_performance_thresholds(&mut self, thresholds: PerformanceThresholds) {
+        self.performance_monitor.update_thresholds(thresholds);
     }
 
     /// Register a built-in effect
     pub fn register_builtin_effects(&mut self) -> Result<(), GPURenderingError> {
         // Register spectrum bars effect
         let spectrum_bars_source = include_str!("shaders/spectrum_bars.hlsl");
-        let spectrum_config = EffectConfig::new(
+        let mut spectrum_config = EffectConfig::new(
             EffectType::SpectrumBars,
             "spectrum_bars".to_string(),
             spectrum_bars_source.to_string(),
             "vertexMain".to_string(),
             "fragmentMain".to_string(),
         );
+        spectrum_config.set_performance_impact(3); // Low impact
         self.register_effect(spectrum_config)?;
 
         // Register waveform effect
         let waveform_source = include_str!("shaders/waveform.hlsl");
-        let waveform_config = EffectConfig::new(
+        let mut waveform_config = EffectConfig::new(
             EffectType::Waveform,
             "waveform".to_string(),
             waveform_source.to_string(),
             "vertexMain".to_string(),
             "fragmentMain".to_string(),
         );
+        waveform_config.set_performance_impact(4); // Medium-low impact
         self.register_effect(waveform_config)?;
 
         // Register particle system effect
         let particle_source = include_str!("shaders/particle_system.hlsl");
-        let particle_config = EffectConfig::new(
+        let mut particle_config = EffectConfig::new(
             EffectType::ParticleSystem,
             "particle_system".to_string(),
             particle_source.to_string(),
             "vertexMain".to_string(),
             "fragmentMain".to_string(),
         );
+        particle_config.set_performance_impact(8); // High impact
         self.register_effect(particle_config)?;
 
         // Register 3D visualizer effect
         let three_d_source = include_str!("shaders/3d_visualizer.hlsl");
-        let three_d_config = EffectConfig::new(
+        let mut three_d_config = EffectConfig::new(
             EffectType::ThreeDimensional,
             "3d_visualizer".to_string(),
             three_d_source.to_string(),
             "vertexMain".to_string(),
             "fragmentMain".to_string(),
         );
+        three_d_config.set_performance_impact(9); // Very high impact
         self.register_effect(three_d_config)?;
 
         info!("Registered {} built-in effects", self.effects.len());
@@ -241,7 +281,7 @@ impl EffectsManager {
             // Try to set blend mode
             let _ = self.bridge.set_blend_mode(config.blend_mode);
             
-            info!("Activated effect: {}", name);
+            info!("Activated effect: {} (performance impact: {})", name, config.performance_impact);
         } else {
             return Err(GPURenderingError::PipelineCreation(
                 format!("Effect '{}' not found", name)
@@ -305,10 +345,54 @@ impl EffectsManager {
         self.effects.get(name)
     }
 
+    /// Get effects sorted by performance impact
+    pub fn effects_by_performance_impact(&self) -> Vec<(&String, &EffectConfig)> {
+        let mut effects: Vec<(&String, &EffectConfig)> = self.effects.iter().collect();
+        effects.sort_by_key(|(_, config)| config.performance_impact);
+        effects
+    }
+
+    /// Get performance-optimized effect suggestions
+    pub fn get_performance_suggestions(&self) -> Vec<String> {
+        let mut suggestions = Vec::new();
+        
+        // Check current performance metrics
+        if let Some(current_metrics) = self.performance_monitor.current_metrics() {
+            if current_metrics.fps < 30.0 {
+                // Suggest switching to lower impact effects
+                let low_impact_effects: Vec<&String> = self.effects
+                    .iter()
+                    .filter(|(_, config)| config.performance_impact <= 4 && config.enabled)
+                    .map(|(name, _)| name)
+                    .collect();
+                
+                if !low_impact_effects.is_empty() {
+                    suggestions.push(format!("Consider switching to a lower impact effect: {:?}", low_impact_effects));
+                }
+            }
+        }
+        
+        // Check active effect performance impact
+        if let Some(active_effect) = &self.active_effect {
+            if let Some(config) = self.effects.get(active_effect) {
+                if config.performance_impact >= 8 {
+                    suggestions.push("Current effect has high performance impact. Consider using a lighter effect for better performance.".to_string());
+                }
+            }
+        }
+        
+        suggestions
+    }
+
     /// Update the effects manager
     pub fn update(&mut self, delta_time: f32) -> Result<(), GPURenderingError> {
         // Update transition state
         self.transition_state.update(delta_time);
+        
+        // Start performance monitoring if enabled
+        if self.performance_monitoring_enabled {
+            self.performance_monitor.start_frame();
+        }
         
         // Update audio data
         self.bridge.update_audio_data()?;
@@ -316,7 +400,36 @@ impl EffectsManager {
         // Render frame
         self.bridge.render_frame()?;
         
+        // End performance monitoring and record metrics
+        if self.performance_monitoring_enabled {
+            let metrics = self.create_performance_metrics();
+            self.performance_monitor.end_frame(metrics);
+        }
+        
         Ok(())
+    }
+
+    /// Create performance metrics for the current frame
+    fn create_performance_metrics(&self) -> PerformanceMetrics {
+        let mut metrics = PerformanceMetrics::default();
+        
+        // Set basic metrics (in a real implementation, these would come from GPU/CPU monitoring)
+        metrics.draw_calls = 1; // Basic assumption
+        metrics.vertex_count = 4; // Full-screen quad
+        metrics.fragment_count = 1920 * 1080; // Assuming 1080p
+        
+        // Set performance impact based on active effect
+        if let Some(active_effect) = &self.active_effect {
+            if let Some(config) = self.effects.get(active_effect) {
+                // Simulate performance impact
+                let impact_factor = config.performance_impact as f32 / 10.0;
+                metrics.gpu_memory = (50.0 + impact_factor * 100.0) as u64 * 1024 * 1024; // 50-150 MB
+                metrics.cpu_usage = 10.0 + impact_factor * 20.0; // 10-30%
+                metrics.audio_processing_time = 1.0 + impact_factor * 3.0; // 1-4ms
+            }
+        }
+        
+        metrics
     }
 
     /// Get bridge reference
@@ -419,6 +532,7 @@ mod tests {
         assert_eq!(config.name, "test_effect");
         assert_eq!(config.effect_type, EffectType::SpectrumBars);
         assert!(config.enabled);
+        assert_eq!(config.performance_impact, 5);
     }
 
     #[test]
@@ -434,6 +548,24 @@ mod tests {
         config.set_parameter("sensitivity", 2.0);
         assert_eq!(config.get_parameter("sensitivity"), Some(2.0));
         assert_eq!(config.get_parameter("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_effect_config_performance_impact() {
+        let mut config = EffectConfig::new(
+            EffectType::ParticleSystem,
+            "test_effect".to_string(),
+            "shader_source".to_string(),
+            "vertexMain".to_string(),
+            "fragmentMain".to_string(),
+        );
+        
+        config.set_performance_impact(8);
+        assert_eq!(config.performance_impact, 8);
+        
+        // Test clamping
+        config.set_performance_impact(15);
+        assert_eq!(config.performance_impact, 10);
     }
 
     #[test]

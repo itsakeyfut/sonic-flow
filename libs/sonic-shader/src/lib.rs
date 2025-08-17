@@ -9,6 +9,7 @@ pub mod renderer;
 pub mod types;
 pub mod audio_bridge;
 pub mod effects_manager;
+pub mod performance;
 
 pub use compiler::ShaderCompiler;
 pub use pipeline::RenderingPipeline;
@@ -16,3 +17,7 @@ pub use renderer::{GPURenderer, ShaderEngine};
 pub use types::*;
 pub use audio_bridge::{AudioVisualizationBridge, VisualizationLoop, VisualizationSettings};
 pub use effects_manager::{EffectsManager, EffectConfig, EffectType, EffectPreset};
+pub use performance::{
+    PerformanceMonitor, PerformanceMetrics, PerformanceThresholds, 
+    PerformanceBenchmark, BenchmarkResults, OptimizationSuggestion,
+};
