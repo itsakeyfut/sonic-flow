@@ -1,0 +1,13 @@
+[package]
+name = "audio-integration-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sonic-shader = { path = "../../libs/sonic-shader" }
+sonic-core = { path = "../../libs/sonic-core" }
+winit = "0.30"
+tokio = { version = "1.47", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
