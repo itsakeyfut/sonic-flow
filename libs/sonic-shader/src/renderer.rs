@@ -1,7 +1,7 @@
 //! GPU renderer implementation
 
 use tracing::{debug, info};
-use wgpu::{Adapter, Backends, Device, Instance, Queue, Surface};
+use wgpu::{Adapter, Backends, Device, Instance, Queue, Surface, SurfaceConfiguration};
 
 use crate::types::{
     AudioVisualizationUniforms, BlendMode, Color, CompiledShader, GPURenderingError, Point, Rect,
@@ -31,6 +31,41 @@ pub struct GPURenderer {
     uniforms: AudioVisualizationUniforms,
     /// Frame counter
     frame_count: u64,
+}
+
+/// Surface wrapper for sharing
+pub struct SurfaceWrapper {
+    /// Surface reference
+    surface: Surface<'static>,
+    /// Surface configuration
+    config: SurfaceConfiguration,
+}
+
+impl SurfaceWrapper {
+    /// Create a new surface wrapper
+    pub fn new(surface: Surface<'static>, config: SurfaceConfiguration) -> Self {
+        Self { surface, config }
+    }
+
+    /// Get surface reference
+    pub fn surface(&self) -> &Surface<'static> {
+        &self.surface
+    }
+
+    /// Get surface configuration
+    pub fn config(&self) -> &SurfaceConfiguration {
+        &self.config
+    }
+
+    /// Get mutable surface reference
+    pub fn surface_mut(&mut self) -> &mut Surface<'static> {
+        &mut self.surface
+    }
+
+    /// Get mutable surface configuration
+    pub fn config_mut(&mut self) -> &mut SurfaceConfiguration {
+        &mut self.config
+    }
 }
 
 impl GPURenderer {
