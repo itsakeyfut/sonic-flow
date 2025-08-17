@@ -14,6 +14,7 @@ members = [
     "examples/hlsl_shader_demo",
     "examples/gpu_integration_demo",
     "examples/audio_integration_demo",
+    "examples/advanced_effects_demo",
 ]
 
 [workspace.package]
