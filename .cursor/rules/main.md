@@ -15,6 +15,7 @@ Sonic Flow is a high-quality music player with advanced audio visualization capa
 
 - **Language**: Rust (2021 edition or later)
 - **UI Framework**: Slint (mandatory - no other UI frameworks)
+- **Graphics**: Slang shader language + wgpu (GPU-accelerated rendering)
 - **Architecture**: Layered architecture (UI/App/Business/Infrastructure)
 - **Async Runtime**: tokio with multi-thread runtime
 
@@ -29,6 +30,13 @@ Always reference these official documentations for accurate implementation:
 - **Tokio Documentation**: https://docs.rs/tokio/latest/tokio/
 - **Slint Documentation**: https://slint.dev/releases/1.8/docs/rust/slint/
 - **Slint Language Reference**: https://slint.dev/releases/1.8/docs/slint/
+
+### Graphics Programming
+
+- **Slang Documentation**: https://shader-slang.org/docs/
+- **Slang User Guide**: https://shader-slang.org/docs/user-guide
+- **Slang Compilation API**: https://shader-slang.org/docs/compilation-api
+- **wgpu Documentation**: https://docs.rs/wgpu/latest/wgpu/
 
 ### Audio Processing
 
@@ -68,6 +76,7 @@ For comprehensive development guidance, reference:
   - `architecture.md`: Architecture patterns
   - `performance.md`: Performance optimization
   - `ui.md`: Slint UI development
+  - `graphics.md`: Slang shader and GPU programming
   - `testing.md`: Testing standards
   - `config.md`: Configuration management
 
@@ -77,9 +86,10 @@ For comprehensive development guidance, reference:
 
 - **Audio Latency**: ≤ 50ms
 - **UI Responsiveness**: ≤ 16ms (60fps)
-- **Visualizer Rendering**: ≤ 8.3ms (120fps target)
+- **Visualizer Rendering**: ≤ 8.3ms (120fps target, GPU-accelerated)
 - **Memory Usage**: ≤ 100MB (idle), ≤ 200MB (active)
 - **CPU Usage**: ≤ 5% (during playback)
+- **GPU Usage**: ≤ 30% (during visualization)
 
 ## Critical Restrictions
 
@@ -144,6 +154,7 @@ src/
 4. **Search project knowledge**: Access detailed specifications and existing implementations
 5. **Follow commit strategy**: Apply git workflow from git.md
 6. **Ensure quality**: Meet all performance requirements and coding standards
+7. **GPU optimization**: Follow graphics.md for shader and GPU programming guidelines
 
 ## When in Doubt
 
