@@ -11,6 +11,7 @@ members = [
     "apps/sonic-cli",
     # Examples
     "examples/basic-player",
+    "examples/hlsl_shader_demo",
 ]
 
 [workspace.package]
