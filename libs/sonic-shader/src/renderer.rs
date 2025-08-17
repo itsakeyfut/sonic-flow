@@ -1,5 +1,6 @@
 //! GPU renderer implementation
 
+use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 use wgpu::{Adapter, Backends, Device, Instance, Queue, Surface, SurfaceConfiguration};
 
@@ -11,6 +12,57 @@ use sonic_core::audio::analysis::SpectrumData;
 
 use super::{compiler::ShaderCompiler, pipeline::RenderingPipeline};
 
+/// Shared surface wrapper for thread-safe access
+pub struct SharedSurface {
+    /// Surface wrapped in Arc<Mutex> for thread-safe sharing
+    surface: Arc<Mutex<Surface<'static>>>,
+    /// Surface configuration
+    config: SurfaceConfiguration,
+}
+
+impl SharedSurface {
+    /// Create a new shared surface
+    pub fn new(surface: Surface<'static>, config: SurfaceConfiguration) -> Self {
+        Self {
+            surface: Arc::new(Mutex::new(surface)),
+            config,
+        }
+    }
+
+    /// Get a reference to the surface (thread-safe)
+    pub fn surface(&self) -> Arc<Mutex<Surface<'static>>> {
+        Arc::clone(&self.surface)
+    }
+
+    /// Get surface configuration
+    pub fn config(&self) -> &SurfaceConfiguration {
+        &self.config
+    }
+
+    /// Get mutable surface configuration
+    pub fn config_mut(&mut self) -> &mut SurfaceConfiguration {
+        &mut self.config
+    }
+
+    /// Configure the surface (thread-safe)
+    pub fn configure(&self, device: &Device) -> Result<(), GPURenderingError> {
+        let surface_guard = self.surface.lock()
+            .map_err(|e| GPURenderingError::SurfaceCreation(format!("Failed to lock surface: {}", e)))?;
+        
+        surface_guard.configure(device, &self.config);
+        Ok(())
+    }
+
+    /// Get current texture (thread-safe)
+    pub fn get_current_texture(&self) -> Result<wgpu::SurfaceTexture, GPURenderingError> {
+        let surface_guard = self.surface.lock()
+            .map_err(|e| GPURenderingError::Rendering(format!("Failed to lock surface: {}", e)))?;
+        
+        surface_guard.get_current_texture()
+            .map_err(|e| GPURenderingError::Rendering(format!("Failed to get current texture: {}", e)))
+    }
+}
+
 /// GPU renderer for audio visualization
 pub struct GPURenderer {
     /// GPU instance
@@ -21,8 +73,8 @@ pub struct GPURenderer {
     device: Device,
     /// GPU command queue
     queue: Queue,
-    /// Render surface
-    surface: Surface<'static>,
+    /// Shared render surface
+    surface: SharedSurface,
     /// Rendering pipeline
     pipeline: Option<RenderingPipeline>,
     /// Shader compiler
@@ -31,41 +83,6 @@ pub struct GPURenderer {
     uniforms: AudioVisualizationUniforms,
     /// Frame counter
     frame_count: u64,
-}
-
-/// Surface wrapper for sharing
-pub struct SurfaceWrapper {
-    /// Surface reference
-    surface: Surface<'static>,
-    /// Surface configuration
-    config: SurfaceConfiguration,
-}
-
-impl SurfaceWrapper {
-    /// Create a new surface wrapper
-    pub fn new(surface: Surface<'static>, config: SurfaceConfiguration) -> Self {
-        Self { surface, config }
-    }
-
-    /// Get surface reference
-    pub fn surface(&self) -> &Surface<'static> {
-        &self.surface
-    }
-
-    /// Get surface configuration
-    pub fn config(&self) -> &SurfaceConfiguration {
-        &self.config
-    }
-
-    /// Get mutable surface reference
-    pub fn surface_mut(&mut self) -> &mut Surface<'static> {
-        &mut self.surface
-    }
-
-    /// Get mutable surface configuration
-    pub fn config_mut(&mut self) -> &mut SurfaceConfiguration {
-        &mut self.config
-    }
 }
 
 impl GPURenderer {
@@ -112,6 +129,29 @@ impl GPURenderer {
 
         info!("GPU device created successfully");
 
+        // Get surface capabilities and create configuration
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
+
+        let surface_config = SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: 800,
+            height: 600,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+
+        // Create shared surface
+        let shared_surface = SharedSurface::new(surface, surface_config);
+
         // Create shader compiler
         let compiler = ShaderCompiler::new();
 
@@ -123,7 +163,7 @@ impl GPURenderer {
             adapter,
             device,
             queue,
-            surface,
+            surface: shared_surface,
             pipeline: None,
             compiler,
             uniforms,
@@ -135,11 +175,25 @@ impl GPURenderer {
     pub async fn initialize_pipeline(&mut self) -> Result<(), GPURenderingError> {
         info!("Initializing rendering pipeline");
 
-        // TODO: Implement proper surface sharing when needed
-        // For now, return an error indicating surface sharing is not implemented
-        return Err(GPURenderingError::PipelineCreation(
-            "Surface sharing not implemented yet".to_string()
-        ));
+        // Configure the surface for the pipeline
+        self.surface.configure(&self.device)?;
+
+        // Create a new surface wrapper for the pipeline
+        let pipeline_surface = self.surface.surface();
+        let pipeline_config = self.surface.config();
+
+        // Create the pipeline
+        let pipeline = RenderingPipeline::new_with_queue(
+            &self.device,
+            &self.queue,
+            pipeline_surface,
+            pipeline_config,
+            &self.compiler,
+        )?;
+
+        self.pipeline = Some(pipeline);
+        info!("Rendering pipeline initialized");
+        Ok(())
     }
 
     /// Load and compile a shader

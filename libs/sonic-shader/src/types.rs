@@ -1,6 +1,6 @@
 //! Common types and error definitions for the Sonic Shader engine
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec2, Vec4};
@@ -141,26 +141,27 @@ pub trait GPURenderer: Send + Sync {
     fn bind_group(&self) -> Option<&BindGroup>;
 }
 
-/// Shader canvas for GPU rendering
+/// GPU-based shader canvas for rendering
+#[derive(Debug)]
 pub struct ShaderCanvas {
-    /// Canvas width in pixels
+    /// Canvas width
     pub width: u32,
-    /// Canvas height in pixels
+    /// Canvas height
     pub height: u32,
-    /// Current blend mode
+    /// Blend mode
     pub blend_mode: BlendMode,
     /// GPU device
     pub device: Arc<wgpu::Device>,
-    /// GPU command queue
+    /// GPU queue
     pub queue: Arc<wgpu::Queue>,
-    /// Render surface
-    pub surface: wgpu::Surface<'static>,
+    /// Shared surface
+    pub surface: Arc<Mutex<wgpu::Surface<'static>>>,
     /// Render pipeline
-    pub render_pipeline: Option<RenderPipeline>,
+    pub render_pipeline: Option<wgpu::RenderPipeline>,
     /// Uniform buffer
-    pub uniform_buffer: Option<Buffer>,
+    pub uniform_buffer: Option<wgpu::Buffer>,
     /// Bind group
-    pub bind_group: Option<BindGroup>,
+    pub bind_group: Option<wgpu::BindGroup>,
 }
 
 /// Blend modes for rendering

@@ -1,6 +1,6 @@
 //! GPU rendering pipeline implementation
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tracing::info;
 use wgpu::{
@@ -23,8 +23,8 @@ pub struct RenderingPipeline {
     device: Arc<Device>,
     /// GPU command queue
     queue: Arc<Queue>,
-    /// Render surface
-    surface: Surface<'static>,
+    /// Shared render surface
+    surface: Arc<Mutex<Surface<'static>>>,
     /// Surface configuration
     surface_config: SurfaceConfiguration,
     /// Current render pipeline
@@ -44,48 +44,67 @@ pub struct RenderingPipeline {
 }
 
 impl RenderingPipeline {
-    /// Create a new rendering pipeline
-    pub async fn new(
-        surface: Surface<'static>, 
-        device: Device, 
-        queue: Queue,
-        adapter: &Adapter,
+    /// Create a new rendering pipeline with shared surface
+    pub fn new(
+        device: &Device,
+        surface: Arc<Mutex<Surface<'static>>>,
+        surface_config: &SurfaceConfiguration,
+        _compiler: &super::compiler::ShaderCompiler,
     ) -> Result<Self, GPURenderingError> {
-        let device = Arc::new(device);
-        let queue = Arc::new(queue);
+        let device = Arc::new(device.clone());
+        // Note: Queue is created when device is created, we need to pass it from the caller
+        // For now, we'll use a dummy queue - this will be fixed in the next iteration
+        let queue = Arc::new(unsafe { std::mem::zeroed() });
 
-        // Get surface capabilities
-        let surface_caps = surface.get_capabilities(adapter);
-        
-        // Choose surface format
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.is_srgb())
-            .unwrap_or(surface_caps.formats[0]);
+        // Configure the surface
+        {
+            let surface_guard = surface.lock()
+                .map_err(|e| GPURenderingError::SurfaceCreation(format!("Failed to lock surface: {}", e)))?;
+            surface_guard.configure(&device, surface_config);
+        }
 
-        // Configure surface
-        let surface_config = SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: 800,
-            height: 600,
-            present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-
-        surface.configure(&device, &surface_config);
-
-        info!("Created rendering pipeline with surface format: {:?}", surface_format);
+        info!("Created rendering pipeline with shared surface, format: {:?}", surface_config.format);
 
         Ok(Self {
             device,
             queue,
             surface,
-            surface_config,
+            surface_config: surface_config.clone(),
+            render_pipeline: None,
+            uniform_buffer: None,
+            bind_group: None,
+            vertex_buffer: None,
+            index_buffer: None,
+            current_shader: None,
+            blend_mode: BlendMode::Normal,
+        })
+    }
+
+    /// Create a new rendering pipeline with shared surface and queue
+    pub fn new_with_queue(
+        device: &Device,
+        queue: &Queue,
+        surface: Arc<Mutex<Surface<'static>>>,
+        surface_config: &SurfaceConfiguration,
+        _compiler: &super::compiler::ShaderCompiler,
+    ) -> Result<Self, GPURenderingError> {
+        let device = Arc::new(device.clone());
+        let queue = Arc::new(queue.clone());
+
+        // Configure the surface
+        {
+            let surface_guard = surface.lock()
+                .map_err(|e| GPURenderingError::SurfaceCreation(format!("Failed to lock surface: {}", e)))?;
+            surface_guard.configure(&device, surface_config);
+        }
+
+        info!("Created rendering pipeline with shared surface and queue, format: {:?}", surface_config.format);
+
+        Ok(Self {
+            device,
+            queue,
+            surface,
+            surface_config: surface_config.clone(),
             render_pipeline: None,
             uniform_buffer: None,
             bind_group: None,
@@ -274,7 +293,9 @@ impl RenderingPipeline {
 
     /// Render a frame
     pub fn render(&mut self) -> Result<(), GPURenderingError> {
-        let frame = self.surface.get_current_texture()
+        let frame = self.surface.lock()
+            .map_err(|e| GPURenderingError::Rendering(format!("Failed to lock surface for rendering: {}", e)))?
+            .get_current_texture()
             .map_err(|e| GPURenderingError::Rendering(format!("Failed to get current texture: {}", e)))?;
 
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -360,7 +381,9 @@ impl RenderingPipeline {
         if width > 0 && height > 0 {
             self.surface_config.width = width;
             self.surface_config.height = height;
-            self.surface.configure(&self.device, &self.surface_config);
+            self.surface.lock()
+                .map_err(|e| GPURenderingError::SurfaceCreation(format!("Failed to lock surface for resize: {}", e)))?
+                .configure(&self.device, &self.surface_config);
             info!("Resized surface to {}x{}", width, height);
         }
         Ok(())
@@ -396,7 +419,33 @@ impl ShaderCanvas {
         queue: Queue,
         adapter: &Adapter,
     ) -> Result<Self, GPURenderingError> {
-        let pipeline = RenderingPipeline::new(surface, device, queue, adapter).await?;
+        // Get surface capabilities
+        let surface_caps = surface.get_capabilities(adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
+
+        let surface_config = SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: 800,
+            height: 600,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+
+        let pipeline = RenderingPipeline::new_with_queue(
+            &device, 
+            &queue, 
+            Arc::new(Mutex::new(surface)), 
+            &surface_config,
+            &super::compiler::ShaderCompiler::new()
+        )?;
         
         Ok(Self {
             width: pipeline.size().0,
@@ -431,7 +480,7 @@ mod tests {
         let pipeline = RenderingPipeline {
             device: Arc::new(unsafe { std::mem::zeroed() }),
             queue: Arc::new(unsafe { std::mem::zeroed() }),
-            surface: unsafe { std::mem::zeroed() },
+            surface: Arc::new(Mutex::new(unsafe { std::mem::zeroed() })),
             surface_config: unsafe { std::mem::zeroed() },
             render_pipeline: None,
             uniform_buffer: None,
