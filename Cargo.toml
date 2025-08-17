@@ -15,6 +15,7 @@ members = [
     "examples/gpu_integration_demo",
     "examples/audio_integration_demo",
     "examples/advanced_effects_demo",
+    "examples/performance_optimization_demo",
 ]
 
 [workspace.package]
