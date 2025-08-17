@@ -1,0 +1,58 @@
+[package]
+name = "sonic-shader"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Slang shader engine for Sonic Flow GPU-accelerated audio visualization"
+
+[dependencies]
+# Core dependencies
+sonic-core = { path = "../sonic-core" }
+
+# Graphics and GPU
+wgpu = "24.0.5"
+bytemuck = { version = "1.23.2", features = ["derive"] }
+glam = "0.30.5"
+winit = "0.30"
+
+# HLSL shader compilation (with future Slang compatibility)
+# Note: Removed slang to avoid clang-sys conflicts
+# Future: Can be replaced with Slang when compatibility improves
+
+# Async runtime
+tokio.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Serialization
+serde.workspace = true
+
+# Utilities
+parking_lot = "0.12"
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+
+[features]
+default = ["vulkan"]
+vulkan = []
+metal = []
+dx12 = []
+wgsl = []
+
+# [[bench]]
+# name = "shader_compilation"
+# harness = false

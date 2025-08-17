@@ -5,6 +5,7 @@ members = [
     "libs/sonic-core",
     "libs/sonic-ui", 
     "libs/sonic-visualizer",
+    "libs/sonic-shader",
     # Applications
     "apps/sonic-app",
     "apps/sonic-cli",
@@ -22,7 +23,7 @@ homepage = "https://github.com/your-org/sonic-flow"
 documentation = "https://docs.rs/sonic-flow"
 keywords = ["audio", "music", "player", "visualizer", "slint"]
 categories = ["multimedia::audio", "gui"]
-rust-version = "1.75"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Audio processing
