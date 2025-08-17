@@ -133,6 +133,9 @@ impl ShaderCompiler {
         wgsl_source = wgsl_source.replace("float3", "vec3<f32>");
         wgsl_source = wgsl_source.replace("float4", "vec4<f32>");
         wgsl_source = wgsl_source.replace("float4x4", "mat4x4<f32>");
+        wgsl_source = wgsl_source.replace("mul(", "(");
+        wgsl_source = wgsl_source.replace("sin(", "sin(");
+        wgsl_source = wgsl_source.replace("smoothstep(", "smoothstep(");
         
         // Add WGSL-specific structure
         let wgsl_header = r#"
@@ -173,8 +176,6 @@ struct AudioVisualizationUniforms {
 
         Ok(())
     }
-
-
 
     /// Extract metadata from shader source
     fn extract_metadata(&self, source: &str) -> Result<ShaderMetadata, ShaderCompilationError> {
@@ -261,6 +262,11 @@ struct AudioVisualizationUniforms {
     pub fn optimization_level(&self) -> OptimizationLevel {
         self.optimization_level
     }
+
+    /// Test HLSL compilation without GPU device
+    pub fn test_hlsl_compilation(&self, source: &str) -> Result<String, ShaderCompilationError> {
+        self.compile_hlsl_to_wgsl(source)
+    }
 }
 
 #[cfg(test)]
@@ -340,11 +346,41 @@ mod tests {
             }
         "#;
         
-        let result = compiler.compile_hlsl_to_wgsl(hlsl_source);
+        let result = compiler.test_hlsl_compilation(hlsl_source);
         assert!(result.is_ok());
         
         let wgsl_source = result.unwrap();
         assert!(wgsl_source.contains("location(0)"));
         assert!(wgsl_source.contains("AudioVisualizationUniforms"));
+    }
+
+    #[test]
+    fn test_spectrum_bars_shader_compilation() {
+        let compiler = ShaderCompiler::new();
+        let spectrum_source = include_str!("shaders/spectrum_bars.hlsl");
+        
+        let result = compiler.test_hlsl_compilation(spectrum_source);
+        assert!(result.is_ok());
+        
+        let wgsl_source = result.unwrap();
+        assert!(wgsl_source.contains("vertexMain"));
+        assert!(wgsl_source.contains("fragmentMain"));
+        assert!(wgsl_source.contains("spectrumData"));
+        assert!(wgsl_source.contains("vec2<f32>"));
+    }
+
+    #[test]
+    fn test_simple_test_shader_compilation() {
+        let compiler = ShaderCompiler::new();
+        let simple_source = include_str!("shaders/simple_test.hlsl");
+        
+        let result = compiler.test_hlsl_compilation(simple_source);
+        assert!(result.is_ok());
+        
+        let wgsl_source = result.unwrap();
+        assert!(wgsl_source.contains("vertexMain"));
+        assert!(wgsl_source.contains("fragmentMain"));
+        assert!(wgsl_source.contains("sin("));
+        assert!(wgsl_source.contains("vec3<f32>"));
     }
 }
