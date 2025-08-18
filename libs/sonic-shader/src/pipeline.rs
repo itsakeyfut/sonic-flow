@@ -46,15 +46,14 @@ pub struct RenderingPipeline {
 impl RenderingPipeline {
     /// Create a new rendering pipeline with shared surface
     pub fn new(
-        device: &Device,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         surface: Arc<Mutex<Surface<'static>>>,
         surface_config: &SurfaceConfiguration,
         _compiler: &super::compiler::ShaderCompiler,
     ) -> Result<Self, GPURenderingError> {
-        let device = Arc::new(device.clone());
-        // Note: Queue is created when device is created, we need to pass it from the caller
-        // For now, we'll use a dummy queue - this will be fixed in the next iteration
-        let queue = Arc::new(unsafe { std::mem::zeroed() });
+        let device = device;
+        let queue = queue;
 
         // Configure the surface
         {
@@ -82,14 +81,14 @@ impl RenderingPipeline {
 
     /// Create a new rendering pipeline with shared surface and queue
     pub fn new_with_queue(
-        device: &Device,
-        queue: &Queue,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         surface: Arc<Mutex<Surface<'static>>>,
         surface_config: &SurfaceConfiguration,
         _compiler: &super::compiler::ShaderCompiler,
     ) -> Result<Self, GPURenderingError> {
-        let device = Arc::new(device.clone());
-        let queue = Arc::new(queue.clone());
+        let device = device;
+        let queue = queue;
 
         // Configure the surface
         {
@@ -182,10 +181,9 @@ impl RenderingPipeline {
         let render_pipeline = self.device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Audio Visualization Pipeline"),
             layout: Some(&pipeline_layout),
-            cache: None,
             vertex: VertexState {
                 module: &shader.module,
-                entry_point: Some(&shader.vertex_entry),
+                entry_point: &shader.vertex_entry,
                 buffers: &[VertexBufferLayout {
                     array_stride: std::mem::size_of::<[f32; 2]>() as u64,
                     step_mode: VertexStepMode::Vertex,
@@ -195,17 +193,15 @@ impl RenderingPipeline {
                         format: VertexFormat::Float32x2,
                     }],
                 }],
-                compilation_options: Default::default(),
             },
             fragment: Some(FragmentState {
                 module: &shader.module,
-                entry_point: Some(&shader.fragment_entry),
+                entry_point: &shader.fragment_entry,
                 targets: &[Some(ColorTargetState {
                     format: self.surface_config.format,
                     blend: Some(self.get_blend_state()),
                     write_mask: ColorWrites::ALL,
                 })],
-                compilation_options: Default::default(),
             }),
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
@@ -440,8 +436,8 @@ impl ShaderCanvas {
         };
 
         let pipeline = RenderingPipeline::new_with_queue(
-            &device, 
-            &queue, 
+            Arc::new(device), 
+            Arc::new(queue), 
             Arc::new(Mutex::new(surface)), 
             &surface_config,
             &super::compiler::ShaderCompiler::new()

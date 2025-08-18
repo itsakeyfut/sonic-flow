@@ -408,11 +408,20 @@ impl MainWindowBinding {
         };
         
         // Create GPU visualization bridge
-        let gpu_bridge = AudioVisualizationBridge::new(player_manager);
+        let mut gpu_bridge = AudioVisualizationBridge::new(player_manager);
         
-        // Initialize GPU engine (this would need a window handle)
-        // For now, we'll create a placeholder that can be initialized later
-        info!("GPU visualization bridge created (GPU engine initialization pending)");
+        // Try to initialize GPU engine
+        // Note: This requires a winit window handle, which we don't have from Slint yet
+        // In a real implementation, you would need to:
+        // 1. Get the native window handle from Slint
+        // 2. Create a winit window from that handle
+        // 3. Pass it to gpu_bridge.initialize_gpu()
+        
+        // For now, we'll use the bridge without GPU initialization
+        // This will still allow shader loading and audio data processing
+        // but without actual GPU rendering
+        
+        info!("GPU visualization bridge created (software mode - GPU initialization pending)");
         
         self.gpu_visualization = Some(gpu_bridge);
         

@@ -1,11 +1,14 @@
 //! Shader engine management module
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use tracing::{info, warn};
+use tracing::{info, warn, debug};
 
-use crate::types::{CompiledShader, ShaderCompilationError};
+use crate::types::{CompiledShader, ShaderCompilationError, GPURenderingError};
 use crate::compiler::ShaderCompiler;
+use crate::renderer::GPURenderer;
+use sonic_core::audio::analysis::SpectrumData;
 
 /// Shader engine for managing multiple shaders and visualizations
 pub struct ShaderEngine {
@@ -17,6 +20,10 @@ pub struct ShaderEngine {
     active_shader: Option<String>,
     /// Engine configuration
     config: EngineConfig,
+    /// GPU renderer
+    gpu_renderer: Option<GPURenderer>,
+    /// Rendering surface
+    surface: Option<Arc<Mutex<wgpu::Surface<'static>>>>,
 }
 
 /// Engine configuration
@@ -51,6 +58,8 @@ impl ShaderEngine {
             shaders: HashMap::new(),
             active_shader: None,
             config: EngineConfig::default(),
+            gpu_renderer: None,
+            surface: None,
         }
     }
 
@@ -64,17 +73,32 @@ impl ShaderEngine {
             shaders: HashMap::new(),
             active_shader: None,
             config,
+            gpu_renderer: None,
+            surface: None,
         }
+    }
+
+    /// Initialize GPU rendering
+    pub async fn initialize_gpu(&mut self, window: &'static winit::window::Window) -> Result<(), GPURenderingError> {
+        info!("Initializing GPU rendering for shader engine");
+        
+        let mut gpu_renderer = GPURenderer::new(window).await?;
+        gpu_renderer.initialize_pipeline().await?;
+        
+        self.gpu_renderer = Some(gpu_renderer);
+        info!("GPU rendering initialized successfully");
+        
+        Ok(())
     }
 
     /// Load a shader from source
     pub fn load_shader(
         &mut self,
         name: &str,
-        _source: &str,
-        _vertex_entry: &str,
-        _fragment_entry: &str,
-    ) -> Result<(), ShaderCompilationError> {
+        source: &str,
+        vertex_entry: &str,
+        fragment_entry: &str,
+    ) -> Result<(), GPURenderingError> {
         info!("Loading shader: {}", name);
 
         // Check if we need to evict a shader
@@ -82,14 +106,15 @@ impl ShaderEngine {
             self.evict_oldest_shader();
         }
 
-        // Compile shader (placeholder - requires GPU device)
-        // TODO: Implement actual shader compilation when GPU context is available
-        // let shader = self.compiler.compile_shader(source, vertex_entry, fragment_entry, &device)?;
+        // Compile and load shader using GPU renderer
+        if let Some(gpu_renderer) = &mut self.gpu_renderer {
+            let shader = gpu_renderer.load_shader(source, vertex_entry, fragment_entry)?;
+            self.shaders.insert(name.to_string(), shader);
+            info!("Shader loaded successfully: {}", name);
+        } else {
+            return Err(GPURenderingError::PipelineCreation("GPU renderer not initialized".to_string()));
+        }
         
-        // For now, return an error indicating GPU context is required
-        return Err(ShaderCompilationError::SlangCompilation(
-            "Shader compilation requires GPU device context".to_string()
-        ));
         Ok(())
     }
 
@@ -100,9 +125,9 @@ impl ShaderEngine {
         file_path: &str,
         vertex_entry: &str,
         fragment_entry: &str,
-    ) -> Result<(), ShaderCompilationError> {
+    ) -> Result<(), GPURenderingError> {
         let source = std::fs::read_to_string(file_path)
-            .map_err(|e| ShaderCompilationError::SlangCompilation(format!("Failed to read shader file: {}", e)))?;
+            .map_err(|e| GPURenderingError::PipelineCreation(format!("Failed to read shader file: {}", e)))?;
 
         self.load_shader(name, &source, vertex_entry, fragment_entry)
     }
@@ -118,13 +143,21 @@ impl ShaderEngine {
     }
 
     /// Activate a shader
-    pub fn activate_shader(&mut self, name: &str) -> Result<(), ShaderCompilationError> {
+    pub fn activate_shader(&mut self, name: &str) -> Result<(), GPURenderingError> {
         if self.shaders.contains_key(name) {
             self.active_shader = Some(name.to_string());
+            
+            // Set the shader in the GPU renderer
+            if let Some(gpu_renderer) = &mut self.gpu_renderer {
+                if let Some(shader) = self.shaders.get(name) {
+                    gpu_renderer.set_shader(shader.clone())?;
+                }
+            }
+            
             info!("Activated shader: {}", name);
             Ok(())
         } else {
-            Err(ShaderCompilationError::EntryPointNotFound(format!("Shader not found: {}", name)))
+            Err(GPURenderingError::PipelineCreation(format!("Shader not found: {}", name)))
         }
     }
 
@@ -221,6 +254,57 @@ impl ShaderEngine {
             max_shaders: self.config.max_shaders,
             caching_enabled: self.config.enable_caching,
         }
+    }
+
+    /// Update audio data for visualization
+    pub fn update_audio_data(&mut self, spectrum: &SpectrumData) -> Result<(), GPURenderingError> {
+        if let Some(gpu_renderer) = &mut self.gpu_renderer {
+            gpu_renderer.update_audio_data(spectrum)?;
+            debug!("Updated audio data for visualization");
+        }
+        Ok(())
+    }
+
+    /// Render a frame
+    pub fn render(&mut self) -> Result<(), GPURenderingError> {
+        if let Some(gpu_renderer) = &mut self.gpu_renderer {
+            gpu_renderer.render()?;
+            debug!("Rendered frame");
+        }
+        Ok(())
+    }
+
+    /// Resize the render target
+    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), GPURenderingError> {
+        if let Some(gpu_renderer) = &mut self.gpu_renderer {
+            gpu_renderer.resize(width, height)?;
+            info!("Resized render target to {}x{}", width, height);
+        }
+        Ok(())
+    }
+
+    /// Get GPU adapter info
+    pub fn gpu_info(&self) -> Option<wgpu::AdapterInfo> {
+        self.gpu_renderer.as_ref().map(|renderer| renderer.adapter_info())
+    }
+
+    /// Check if GPU rendering is available
+    pub fn is_gpu_available(&self) -> bool {
+        self.gpu_renderer.is_some()
+    }
+
+    /// Set blend mode
+    pub fn set_blend_mode(&mut self, mode: crate::types::BlendMode) -> Result<(), GPURenderingError> {
+        if let Some(gpu_renderer) = &mut self.gpu_renderer {
+            gpu_renderer.set_blend_mode(mode)?;
+            info!("Set blend mode: {:?}", mode);
+        }
+        Ok(())
+    }
+
+    /// Get frame count
+    pub fn frame_count(&self) -> u64 {
+        self.gpu_renderer.as_ref().map(|renderer| renderer.frame_count()).unwrap_or(0)
     }
 }
 

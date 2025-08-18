@@ -8,7 +8,7 @@ use sonic_core::audio::{
 };
 
 use crate::{
-    renderer::ShaderEngine,
+    ShaderEngine,
     types::GPURenderingError,
 };
 
@@ -71,8 +71,8 @@ impl AudioVisualizationBridge {
     pub async fn initialize_gpu(&mut self, window: &'static winit::window::Window) -> Result<(), GPURenderingError> {
         info!("Initializing GPU shader engine for audio visualization");
         
-        let mut shader_engine = ShaderEngine::new(window).await?;
-        shader_engine.initialize().await?;
+        let mut shader_engine = ShaderEngine::new();
+        shader_engine.initialize_gpu(window).await?;
         
         self.shader_engine = Some(shader_engine);
         info!("GPU shader engine initialized successfully");
@@ -251,7 +251,7 @@ impl AudioVisualizationBridge {
     /// Get active shader name
     pub fn active_shader(&self) -> Option<String> {
         if let Some(shader_engine) = &self.shader_engine {
-            shader_engine.active_shader().cloned()
+            shader_engine.active_shader_name().cloned()
         } else {
             None
         }
@@ -269,7 +269,7 @@ impl AudioVisualizationBridge {
     /// Get GPU info
     pub fn gpu_info(&self) -> Option<wgpu::AdapterInfo> {
         if let Some(shader_engine) = &self.shader_engine {
-            Some(shader_engine.gpu_info())
+            shader_engine.gpu_info()
         } else {
             None
         }

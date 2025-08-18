@@ -70,9 +70,9 @@ pub struct GPURenderer {
     /// GPU adapter
     adapter: Adapter,
     /// GPU device
-    device: Device,
+    device: Arc<Device>,
     /// GPU command queue
-    queue: Queue,
+    queue: Arc<Queue>,
     /// Shared render surface
     surface: SharedSurface,
     /// Rendering pipeline
@@ -91,10 +91,11 @@ impl GPURenderer {
         info!("Initializing GPU renderer");
 
         // Create wgpu instance
-        let instance = Instance::new(&wgpu::InstanceDescriptor {
+        let instance = Instance::new(wgpu::InstanceDescriptor {
             backends: Backends::all(),
             flags: wgpu::InstanceFlags::default(),
-            backend_options: Default::default(),
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
         });
 
         // Create surface
@@ -120,7 +121,6 @@ impl GPURenderer {
                     label: Some("Sonic Flow GPU Device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
-                    memory_hints: Default::default(),
                 },
                 None,
             )
@@ -128,6 +128,9 @@ impl GPURenderer {
             .map_err(|e| GPURenderingError::DeviceInit(format!("Failed to create device: {}", e)))?;
 
         info!("GPU device created successfully");
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
 
         // Get surface capabilities and create configuration
         let surface_caps = surface.get_capabilities(&adapter);
@@ -171,6 +174,87 @@ impl GPURenderer {
         })
     }
 
+    /// Create a new GPU renderer with custom surface (for testing)
+    pub async fn new_with_surface(surface: Surface<'static>) -> Result<Self, GPURenderingError> {
+        info!("Initializing GPU renderer with custom surface");
+
+        // Create wgpu instance
+        let instance = Instance::new(wgpu::InstanceDescriptor {
+            backends: Backends::all(),
+            flags: wgpu::InstanceFlags::default(),
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+        });
+
+        // Request adapter
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok_or_else(|| GPURenderingError::DeviceInit("No suitable GPU adapter found".to_string()))?;
+
+        info!("Selected GPU adapter: {}", adapter.get_info().name);
+
+        // Request device
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("Sonic Flow GPU Device"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                },
+                None,
+            )
+            .await
+            .map_err(|e| GPURenderingError::DeviceInit(format!("Failed to create device: {}", e)))?;
+
+        info!("GPU device created successfully");
+
+        // Get surface capabilities and create configuration
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
+
+        let surface_config = SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: 800,
+            height: 600,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+
+        // Create shared surface
+        let shared_surface = SharedSurface::new(surface, surface_config);
+
+        // Create shader compiler
+        let compiler = ShaderCompiler::new();
+
+        // Create initial uniforms
+        let uniforms = AudioVisualizationUniforms::default();
+
+        Ok(Self {
+            instance,
+            adapter,
+            device: Arc::new(device),
+            queue: Arc::new(queue),
+            surface: shared_surface,
+            pipeline: None,
+            compiler,
+            uniforms,
+            frame_count: 0,
+        })
+    }
+
     /// Initialize rendering pipeline
     pub async fn initialize_pipeline(&mut self) -> Result<(), GPURenderingError> {
         info!("Initializing rendering pipeline");
@@ -184,8 +268,8 @@ impl GPURenderer {
 
         // Create the pipeline
         let pipeline = RenderingPipeline::new_with_queue(
-            &self.device,
-            &self.queue,
+            Arc::clone(&self.device),
+            Arc::clone(&self.queue),
             pipeline_surface,
             pipeline_config,
             &self.compiler,
@@ -302,117 +386,7 @@ impl GPURenderer {
     }
 }
 
-/// Shader engine for managing multiple shaders
-pub struct ShaderEngine {
-    /// GPU renderer
-    renderer: GPURenderer,
-    /// Loaded shaders
-    shaders: std::collections::HashMap<String, CompiledShader>,
-    /// Current active shader
-    active_shader: Option<String>,
-}
 
-impl ShaderEngine {
-    /// Create a new shader engine
-    pub async fn new(window: &'static winit::window::Window) -> Result<Self, GPURenderingError> {
-        let renderer = GPURenderer::new(window).await?;
-        let shaders = std::collections::HashMap::new();
-
-        Ok(Self {
-            renderer,
-            shaders,
-            active_shader: None,
-        })
-    }
-
-    /// Initialize the engine
-    pub async fn initialize(&mut self) -> Result<(), GPURenderingError> {
-        self.renderer.initialize_pipeline().await?;
-        info!("Shader engine initialized");
-        Ok(())
-    }
-
-    /// Load a shader from source
-    pub fn load_shader(
-        &mut self,
-        name: &str,
-        source: &str,
-        vertex_entry: &str,
-        fragment_entry: &str,
-    ) -> Result<(), GPURenderingError> {
-        let shader = self.renderer.load_shader(source, vertex_entry, fragment_entry)?;
-        self.shaders.insert(name.to_string(), shader);
-        info!("Loaded shader: {}", name);
-        Ok(())
-    }
-
-    /// Load a shader from file
-    pub fn load_shader_from_file(
-        &mut self,
-        name: &str,
-        file_path: &str,
-        vertex_entry: &str,
-        fragment_entry: &str,
-    ) -> Result<(), GPURenderingError> {
-        let source = std::fs::read_to_string(file_path)
-            .map_err(|e| GPURenderingError::PipelineCreation(format!("Failed to read shader file: {}", e)))?;
-
-        self.load_shader(name, &source, vertex_entry, fragment_entry)
-    }
-
-    /// Activate a shader
-    pub fn activate_shader(&mut self, name: &str) -> Result<(), GPURenderingError> {
-        if let Some(shader) = self.shaders.get(name).cloned() {
-            self.renderer.set_shader(shader)?;
-            self.active_shader = Some(name.to_string());
-            info!("Activated shader: {}", name);
-        } else {
-            return Err(GPURenderingError::PipelineCreation(format!("Shader not found: {}", name)));
-        }
-
-        Ok(())
-    }
-
-    /// Update audio data
-    pub fn update_audio_data(&mut self, spectrum: &SpectrumData) -> Result<(), GPURenderingError> {
-        self.renderer.update_audio_data(spectrum)
-    }
-
-    /// Render current frame
-    pub fn render(&mut self) -> Result<(), GPURenderingError> {
-        self.renderer.render()
-    }
-
-    /// Resize render target
-    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), GPURenderingError> {
-        self.renderer.resize(width, height)
-    }
-
-    /// Set blend mode
-    pub fn set_blend_mode(&mut self, mode: BlendMode) -> Result<(), GPURenderingError> {
-        self.renderer.set_blend_mode(mode)
-    }
-
-    /// Get loaded shader names
-    pub fn shader_names(&self) -> Vec<String> {
-        self.shaders.keys().cloned().collect()
-    }
-
-    /// Get active shader name
-    pub fn active_shader(&self) -> Option<&String> {
-        self.active_shader.as_ref()
-    }
-
-    /// Get frame count
-    pub fn frame_count(&self) -> u64 {
-        self.renderer.frame_count()
-    }
-
-    /// Get GPU info
-    pub fn gpu_info(&self) -> wgpu::AdapterInfo {
-        self.renderer.adapter_info()
-    }
-}
 
 /// Canvas implementation for GPU rendering
 impl crate::types::Canvas for ShaderCanvas {

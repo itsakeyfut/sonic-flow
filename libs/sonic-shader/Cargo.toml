@@ -17,10 +17,10 @@ description = "Slang shader engine for Sonic Flow GPU-accelerated audio visualiz
 sonic-core = { path = "../sonic-core" }
 
 # Graphics and GPU
-wgpu = "24.0.5"
+wgpu = "0.19"
 bytemuck = { version = "1.23.2", features = ["derive"] }
 glam = "0.30.5"
-winit = "0.30"
+winit = "0.29"
 
 # HLSL shader compilation (with future Slang compatibility)
 # Note: Removed slang to avoid clang-sys conflicts
