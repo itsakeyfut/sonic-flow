@@ -24,6 +24,7 @@ path = "src/main.rs"
 sonic-core = { path = "../../libs/sonic-core" }
 sonic-ui = { path = "../../libs/sonic-ui", optional = true }
 sonic-visualizer = { path = "../../libs/sonic-visualizer" }
+sonic-shader = { path = "../../libs/sonic-shader" }
 
 # Async runtime
 tokio.workspace = true

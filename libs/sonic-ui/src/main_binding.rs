@@ -3,15 +3,20 @@
 //! This module provides the primary UI binding for the Sonic Flow music player
 //! with audio integration using event loop based architecture and safe channel communication.
 
-use slint::{ComponentHandle, Weak};
+use slint::ComponentHandle;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use sonic_core::Result;
 use crate::audio_bridge::{AudioCommand, AudioIntegration};
 use crate::bindings::MainWindow; // Use existing MainWindow
+use sonic_shader::{
+    AudioVisualizationBridge, 
+    VisualizationSettings, 
+    EffectsManager,
+};
 
 /// UI command from callbacks
 #[derive(Debug)]
@@ -33,6 +38,10 @@ pub struct MainWindowBinding {
     window: MainWindow,
     /// Audio integration manager
     audio_integration: Arc<AudioIntegration>,
+    /// GPU visualization bridge
+    gpu_visualization: Option<AudioVisualizationBridge>,
+    /// Effects manager for visualization presets
+    effects_manager: EffectsManager,
     /// UI command sender for safe callback communication
     ui_command_tx: mpsc::UnboundedSender<UiCommand>,
     /// Command processor task handle
@@ -51,6 +60,19 @@ impl MainWindowBinding {
         // Create audio integration with weak window reference
         let audio_integration = Arc::new(AudioIntegration::new(window.as_weak())?);
 
+        // Initialize effects manager for visualization presets
+        // Note: EffectsManager requires AudioVisualizationBridge, so we'll create a placeholder
+        // and initialize it properly when GPU visualization is available
+        let placeholder_player_manager = match sonic_core::audio::player_manager::PlayerManager::new() {
+            Ok(manager) => Arc::new(Mutex::new(manager)),
+            Err(e) => {
+                warn!("Failed to create placeholder player manager: {}", e);
+                return Err(sonic_core::Error::Application(format!("Failed to create player manager: {}", e)));
+            }
+        };
+        
+        let effects_manager = EffectsManager::new(AudioVisualizationBridge::new(placeholder_player_manager));
+
         // Create UI command channel
         let (ui_command_tx, ui_command_rx) = mpsc::unbounded_channel();
 
@@ -63,6 +85,8 @@ impl MainWindowBinding {
         let binding = Self {
             window,
             audio_integration,
+            gpu_visualization: None, // Will be initialized later when GPU is available
+            effects_manager,
             ui_command_tx,
             _command_processor: command_processor,
         };
@@ -261,10 +285,50 @@ impl MainWindowBinding {
         self.window.on_playlist_save(|| debug!("Playlist save"));
         self.window.on_playlist_clear(|| debug!("Playlist clear"));
         self.window.on_playlist_toggle_collapsed(|| debug!("Playlist toggle collapsed"));
-        self.window.on_visualizer_changed(|_| debug!("Visualizer changed"));
-        self.window.on_visualizer_sensitivity_changed(|_| debug!("Visualizer sensitivity changed"));
-        self.window.on_visualizer_smoothing_changed(|_| debug!("Visualizer smoothing changed"));
-        self.window.on_visualizer_preset_selected(|_| debug!("Visualizer preset selected"));
+        // Visualizer controls
+        self.window.on_visualizer_changed({
+            let ui_command_tx = self.ui_command_tx.clone();
+            
+            move |visualizer_type| {
+                debug!("Visualizer changed to: {}", visualizer_type);
+                
+                // TODO: Apply visualization preset based on type
+                // This would need to be handled in the command processor
+            }
+        });
+        
+        self.window.on_visualizer_sensitivity_changed({
+            let ui_command_tx = self.ui_command_tx.clone();
+            
+            move |sensitivity| {
+                debug!("Visualizer sensitivity changed to: {:.2}", sensitivity);
+                
+                // TODO: Update visualization settings
+                // This would need to be handled in the command processor
+            }
+        });
+        
+        self.window.on_visualizer_smoothing_changed({
+            let ui_command_tx = self.ui_command_tx.clone();
+            
+            move |smoothing| {
+                debug!("Visualizer smoothing changed to: {:.2}", smoothing);
+                
+                // TODO: Update visualization settings
+                // This would need to be handled in the command processor
+            }
+        });
+        
+        self.window.on_visualizer_preset_selected({
+            let ui_command_tx = self.ui_command_tx.clone();
+            
+            move |preset_name| {
+                debug!("Visualizer preset selected: {}", preset_name);
+                
+                // TODO: Apply visualization preset
+                // This would need to be handled in the command processor
+            }
+        });
         self.window.on_fullscreen_toggled(|| debug!("Fullscreen toggled"));
     }
 
@@ -327,6 +391,117 @@ impl MainWindowBinding {
                 "File dialog not supported on WASM".to_string(),
             ))
         }
+    }
+
+    /// Initialize GPU visualization bridge
+    pub async fn initialize_gpu_visualization(&mut self) -> Result<()> {
+        info!("Initializing GPU visualization bridge");
+        
+        // Create a placeholder player manager for GPU visualization bridge
+        // TODO: Get the actual player manager from audio integration when available
+        let player_manager = match sonic_core::audio::player_manager::PlayerManager::new() {
+            Ok(manager) => Arc::new(Mutex::new(manager)),
+            Err(e) => {
+                warn!("Failed to create placeholder player manager: {}", e);
+                return Err(sonic_core::Error::Application(format!("Failed to create player manager: {}", e)));
+            }
+        };
+        
+        // Create GPU visualization bridge
+        let gpu_bridge = AudioVisualizationBridge::new(player_manager);
+        
+        // Initialize GPU engine (this would need a window handle)
+        // For now, we'll create a placeholder that can be initialized later
+        info!("GPU visualization bridge created (GPU engine initialization pending)");
+        
+        self.gpu_visualization = Some(gpu_bridge);
+        
+        Ok(())
+    }
+    
+    /// Load a visualization shader
+    pub fn load_visualization_shader(
+        &mut self,
+        name: &str,
+        source: &str,
+        vertex_entry: &str,
+        fragment_entry: &str,
+    ) -> Result<()> {
+        if let Some(gpu_bridge) = &mut self.gpu_visualization {
+            gpu_bridge.load_visualization_shader(name, source, vertex_entry, fragment_entry)
+                .map_err(|e| sonic_core::Error::Application(format!("Failed to load shader: {}", e)))?;
+            info!("Loaded visualization shader: {}", name);
+        } else {
+            return Err(sonic_core::Error::Application("GPU visualization not initialized".to_string()));
+        }
+        
+        Ok(())
+    }
+    
+    /// Get current visualization settings
+    pub fn get_visualization_settings(&self) -> Option<VisualizationSettings> {
+        self.gpu_visualization.as_ref().map(|bridge| bridge.settings()).cloned()
+    }
+    
+    /// Update visualization settings
+    pub fn update_visualization_settings(&mut self, settings: VisualizationSettings) -> Result<()> {
+        if let Some(gpu_bridge) = &mut self.gpu_visualization {
+            gpu_bridge.update_settings(settings);
+            info!("Updated visualization settings");
+        } else {
+            return Err(sonic_core::Error::Application("GPU visualization not initialized".to_string()));
+        }
+        
+        Ok(())
+    }
+    
+    /// Get available visualization presets
+    pub fn get_visualization_presets(&self) -> Vec<String> {
+        // TODO: Implement proper preset management
+        vec![
+            "Spectrum Bars".to_string(),
+            "Waveform".to_string(),
+            "Particle System".to_string(),
+        ]
+    }
+    
+    /// Apply visualization preset
+    pub fn apply_visualization_preset(&mut self, preset_name: &str) -> Result<()> {
+        // TODO: Implement proper preset application
+        info!("Applying visualization preset: {}", preset_name);
+        
+        // Create default settings based on preset name
+        let settings = match preset_name {
+            "Spectrum Bars" => VisualizationSettings {
+                update_frequency: 60.0,
+                sensitivity: 1.0,
+                smoothing: 0.3,
+                band_count: 128,
+                real_time: true,
+            },
+            "Waveform" => VisualizationSettings {
+                update_frequency: 60.0,
+                sensitivity: 1.0,
+                smoothing: 0.2,
+                band_count: 256,
+                real_time: true,
+            },
+            "Particle System" => VisualizationSettings {
+                update_frequency: 60.0,
+                sensitivity: 1.5,
+                smoothing: 0.1,
+                band_count: 64,
+                real_time: true,
+            },
+            _ => {
+                return Err(sonic_core::Error::Application(format!("Preset not found: {}", preset_name)));
+            }
+        };
+        
+        self.update_visualization_settings(settings)?;
+        info!("Applied visualization preset: {}", preset_name);
+        
+        Ok(())
     }
 
     /// Get window reference

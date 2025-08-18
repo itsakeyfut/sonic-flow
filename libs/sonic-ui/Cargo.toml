@@ -16,6 +16,7 @@ description = "User interface library for Sonic Flow music player"
 # Core dependencies
 sonic-core = { path = "../sonic-core" }
 sonic-visualizer = { path = "../sonic-visualizer" }
+sonic-shader = { path = "../sonic-shader" }
 
 # UI framework
 slint.workspace = true
