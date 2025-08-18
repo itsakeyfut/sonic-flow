@@ -5,11 +5,18 @@ members = [
     "libs/sonic-core",
     "libs/sonic-ui", 
     "libs/sonic-visualizer",
+    "libs/sonic-shader",
     # Applications
     "apps/sonic-app",
     "apps/sonic-cli",
     # Examples
     "examples/basic-player",
+    "examples/hlsl_shader_demo",
+    "examples/gpu_integration_demo",
+    "examples/audio_integration_demo",
+    "examples/advanced_effects_demo",
+    "examples/performance_optimization_demo",
+    "examples/gpu_rendering_test",
 ]
 
 [workspace.package]
@@ -22,7 +29,7 @@ homepage = "https://github.com/your-org/sonic-flow"
 documentation = "https://docs.rs/sonic-flow"
 keywords = ["audio", "music", "player", "visualizer", "slint"]
 categories = ["multimedia::audio", "gui"]
-rust-version = "1.75"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Audio processing

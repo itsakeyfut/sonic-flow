@@ -1,0 +1,8 @@
+[package]
+name = "hlsl-shader-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sonic-shader = { path = "../../libs/sonic-shader" }
+sonic-core = { path = "../../libs/sonic-core" }

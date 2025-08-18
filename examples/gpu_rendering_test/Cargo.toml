@@ -1,0 +1,17 @@
+[package]
+name = "gpu_rendering_test"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gpu_rendering_test"
+path = "main.rs"
+
+[dependencies]
+sonic-core = { path = "../../libs/sonic-core" }
+sonic-shader = { path = "../../libs/sonic-shader" }
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+winit = "0.29"
+wgpu = "0.19"

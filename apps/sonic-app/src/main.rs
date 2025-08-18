@@ -41,9 +41,106 @@ async fn main() -> Result<()> {
     result
 }
 
+/// Load default visualization shaders
+fn load_default_visualization_shaders(player: &mut sonic_ui::MainWindowBinding) -> Result<()> {
+    info!("Loading default visualization shaders");
+    
+    // Load spectrum bars shader
+    let spectrum_bars_shader = r#"
+        // Simple spectrum bars vertex shader
+        struct VertexInput {
+            @location(0) position: vec3<f32>,
+            @location(1) uv: vec2<f32>,
+        };
+        
+        struct VertexOutput {
+            @builtin(position) position: vec4<f32>,
+            @location(0) uv: vec2<f32>,
+        };
+        
+        @vertex
+        fn vertexMain(input: VertexInput) -> VertexOutput {
+            var output: VertexOutput;
+            output.position = vec4<f32>(input.position, 1.0);
+            output.uv = input.uv;
+            return output;
+        }
+        
+        @fragment
+        fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
+            let intensity = input.uv.y;
+            return vec4<f32>(intensity, 0.5, 1.0 - intensity, 1.0);
+        }
+    "#;
+    
+    if let Err(e) = player.load_visualization_shader(
+        "spectrum_bars",
+        spectrum_bars_shader,
+        "vertexMain",
+        "fragmentMain"
+    ) {
+        warn!("Failed to load spectrum bars shader: {}", e);
+    }
+    
+    // Load waveform shader
+    let waveform_shader = r#"
+        // Simple waveform vertex shader
+        struct VertexInput {
+            @location(0) position: vec3<f32>,
+            @location(1) uv: vec2<f32>,
+        };
+        
+        struct VertexOutput {
+            @builtin(position) position: vec4<f32>,
+            @location(0) uv: vec2<f32>,
+        };
+        
+        @vertex
+        fn vertexMain(input: VertexInput) -> VertexOutput {
+            var output: VertexOutput;
+            output.position = vec4<f32>(input.position, 1.0);
+            output.uv = input.uv;
+            return output;
+        }
+        
+        @fragment
+        fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
+            let wave = sin(input.uv.x * 10.0) * 0.5 + 0.5;
+            let alpha = step(input.uv.y, wave);
+            return vec4<f32>(0.2, 0.8, 1.0, alpha);
+        }
+    "#;
+    
+    if let Err(e) = player.load_visualization_shader(
+        "waveform",
+        waveform_shader,
+        "vertexMain",
+        "fragmentMain"
+    ) {
+        warn!("Failed to load waveform shader: {}", e);
+    }
+    
+    info!("Default visualization shaders loaded");
+    Ok(())
+}
+
 async fn run_application() -> Result<()> {
     // Create main window binding with integrated audio support
-    let player = MainWindowBinding::new()?;
+    let mut player = MainWindowBinding::new()?;
+
+    // Initialize GPU visualization bridge
+    info!("Initializing GPU visualization bridge...");
+    if let Err(e) = player.initialize_gpu_visualization().await {
+        warn!("Failed to initialize GPU visualization: {}", e);
+        info!("Continuing without GPU acceleration");
+    } else {
+        info!("GPU visualization bridge initialized successfully");
+        
+        // Load default visualization shaders
+        if let Err(e) = load_default_visualization_shaders(&mut player) {
+            warn!("Failed to load default shaders: {}", e);
+        }
+    }
 
     // Check for demo audio files and load one if available
     if let Some(demo_path) = find_demo_audio_file() {

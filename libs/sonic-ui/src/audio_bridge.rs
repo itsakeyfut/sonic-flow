@@ -37,6 +37,12 @@ pub enum AudioCommand {
     SkipBackward(f64),
     /// Request current status
     RequestStatus,
+    /// Request spectrum data for visualization
+    RequestSpectrumData,
+    /// Change visualization preset
+    ChangeVisualizerPreset(String),
+    /// Update visualization settings
+    UpdateVisualizerSettings(sonic_shader::VisualizationSettings),
 }
 
 /// UI update events from the audio system
@@ -54,6 +60,12 @@ pub enum UiUpdateEvent {
         success: bool,
         error: Option<String>,
     },
+    /// Spectrum data updated for visualization
+    SpectrumDataUpdated(sonic_core::audio::analysis::SpectrumData),
+    /// Visualization preset changed
+    VisualizationPresetChanged(String),
+    /// Visualization settings updated
+    VisualizationSettingsUpdated(sonic_shader::VisualizationSettings),
 }
 
 /// Audio integration manager for UI
@@ -200,6 +212,29 @@ impl AudioIntegration {
                         let status = player_manager.get_status().await;
                         let _ = ui_update_tx.send(UiUpdateEvent::PlayerStatusChanged(status));
                     }
+                    
+                    AudioCommand::RequestSpectrumData => {
+                        // Get current spectrum data from player manager
+                        // Since PlayerManager doesn't have get_spectrum_data method yet,
+                        // we'll simulate spectrum data for now
+                        let simulated_spectrum = sonic_core::audio::analysis::SpectrumData {
+                            bands: vec![0.5; 128], // Simulated 128-band spectrum
+                            peak_level: 0.5,
+                            rms_level: 0.3,
+                            timestamp: std::time::Instant::now(),
+                        };
+                        let _ = ui_update_tx.send(UiUpdateEvent::SpectrumDataUpdated(simulated_spectrum));
+                    }
+                    
+                    AudioCommand::ChangeVisualizerPreset(preset_name) => {
+                        info!("Changing visualization preset to: {}", preset_name);
+                        let _ = ui_update_tx.send(UiUpdateEvent::VisualizationPresetChanged(preset_name));
+                    }
+                    
+                    AudioCommand::UpdateVisualizerSettings(settings) => {
+                        info!("Updating visualization settings");
+                        let _ = ui_update_tx.send(UiUpdateEvent::VisualizationSettingsUpdated(settings));
+                    }
                 }
             }
 
@@ -260,6 +295,27 @@ impl AudioIntegration {
                     error!("Loading failed: {} - {:?}", path.display(), error);
                     window.set_playback_state("Error".into());
                 }
+            }
+            
+            UiUpdateEvent::SpectrumDataUpdated(spectrum_data) => {
+                debug!("Spectrum data updated: {} bands, peak: {:.3}, rms: {:.3}", 
+                       spectrum_data.bands.len(), spectrum_data.peak_level, spectrum_data.rms_level);
+                // The spectrum data will be processed by the MainWindowBinding
+                // This event is mainly for logging and debugging
+            }
+            
+            UiUpdateEvent::VisualizationPresetChanged(preset_name) => {
+                info!("Visualization preset changed to: {}", preset_name);
+                // Update UI to reflect the new preset
+                window.set_visualizer_type(preset_name.into());
+            }
+            
+            UiUpdateEvent::VisualizationSettingsUpdated(settings) => {
+                debug!("Visualization settings updated: sensitivity={:.2}, smoothing={:.2}", 
+                       settings.sensitivity, settings.smoothing);
+                // Update UI to reflect the new settings
+                window.set_visualizer_sensitivity(settings.sensitivity);
+                window.set_visualizer_smoothing(settings.smoothing);
             }
         }
     }
