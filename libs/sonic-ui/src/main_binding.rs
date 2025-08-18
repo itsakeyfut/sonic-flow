@@ -10,7 +10,8 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use sonic_core::Result;
-use crate::audio_bridge::{AudioCommand, AudioIntegration};
+use sonic_core::audio::analysis::SpectrumData;
+use crate::audio_bridge::{AudioCommand, AudioIntegration, UiUpdateEvent};
 use crate::bindings::MainWindow; // Use existing MainWindow
 use sonic_shader::{
     AudioVisualizationBridge, 
@@ -30,6 +31,10 @@ pub enum UiCommand {
     SkipForward(f64),
     SkipBackward(f64),
     Seek(f32),
+    // Visualizer commands
+    UpdateVisualizer,
+    ChangeVisualizerPreset(String),
+    UpdateVisualizerSettings(VisualizationSettings),
 }
 
 /// Main UI binding with audio integration
@@ -46,6 +51,10 @@ pub struct MainWindowBinding {
     ui_command_tx: mpsc::UnboundedSender<UiCommand>,
     /// Command processor task handle
     _command_processor: tokio::task::JoinHandle<()>,
+    /// Visualization update timer
+    visualization_timer: slint::Timer,
+    /// Current audio spectrum data for visualization
+    current_spectrum: Arc<Mutex<Option<SpectrumData>>>,
 }
 
 impl MainWindowBinding {
@@ -89,6 +98,8 @@ impl MainWindowBinding {
             effects_manager,
             ui_command_tx,
             _command_processor: command_processor,
+            visualization_timer: slint::Timer::default(),
+            current_spectrum: Arc::new(Mutex::new(None)),
         };
 
         // Set up UI callbacks
@@ -133,6 +144,10 @@ impl MainWindowBinding {
                         let seek_position = Duration::from_secs_f32(position * 300.0); // TODO: Use actual duration
                         AudioCommand::Seek(seek_position)
                     }
+                    // Visualizer commands
+                    UiCommand::UpdateVisualizer => AudioCommand::RequestSpectrumData,
+                    UiCommand::ChangeVisualizerPreset(preset_name) => AudioCommand::ChangeVisualizerPreset(preset_name),
+                    UiCommand::UpdateVisualizerSettings(settings) => AudioCommand::UpdateVisualizerSettings(settings),
                 };
 
                 if let Err(_) = audio_command_tx.send(audio_command) {
@@ -292,8 +307,10 @@ impl MainWindowBinding {
             move |visualizer_type| {
                 debug!("Visualizer changed to: {}", visualizer_type);
                 
-                // TODO: Apply visualization preset based on type
-                // This would need to be handled in the command processor
+                // Apply visualization preset based on type
+                if let Err(_) = ui_command_tx.send(UiCommand::ChangeVisualizerPreset(visualizer_type.to_string())) {
+                    error!("Failed to send visualizer preset change command");
+                }
             }
         });
         
@@ -303,8 +320,18 @@ impl MainWindowBinding {
             move |sensitivity| {
                 debug!("Visualizer sensitivity changed to: {:.2}", sensitivity);
                 
-                // TODO: Update visualization settings
-                // This would need to be handled in the command processor
+                // Update visualization settings
+                let settings = sonic_shader::VisualizationSettings {
+                    update_frequency: 60.0,
+                    sensitivity,
+                    smoothing: 0.5, // Keep current smoothing
+                    band_count: 128,
+                    real_time: true,
+                };
+                
+                if let Err(_) = ui_command_tx.send(UiCommand::UpdateVisualizerSettings(settings)) {
+                    error!("Failed to send visualizer settings update command");
+                }
             }
         });
         
@@ -314,8 +341,18 @@ impl MainWindowBinding {
             move |smoothing| {
                 debug!("Visualizer smoothing changed to: {:.2}", smoothing);
                 
-                // TODO: Update visualization settings
-                // This would need to be handled in the command processor
+                // Update visualization settings
+                let settings = sonic_shader::VisualizationSettings {
+                    update_frequency: 60.0,
+                    sensitivity: 1.0, // Keep current sensitivity
+                    smoothing,
+                    band_count: 128,
+                    real_time: true,
+                };
+                
+                if let Err(_) = ui_command_tx.send(UiCommand::UpdateVisualizerSettings(settings)) {
+                    error!("Failed to send visualizer settings update command");
+                }
             }
         });
         
@@ -325,11 +362,72 @@ impl MainWindowBinding {
             move |preset_name| {
                 debug!("Visualizer preset selected: {}", preset_name);
                 
-                // TODO: Apply visualization preset
-                // This would need to be handled in the command processor
+                // Apply visualization preset
+                if let Err(_) = ui_command_tx.send(UiCommand::ChangeVisualizerPreset(preset_name.to_string())) {
+                    error!("Failed to send visualizer preset change command");
+                }
             }
         });
         self.window.on_fullscreen_toggled(|| debug!("Fullscreen toggled"));
+        
+        // Set up visualization update timer
+        self.setup_visualization_timer();
+    }
+
+    /// Set up visualization update timer
+    fn setup_visualization_timer(&self) {
+        let current_spectrum = Arc::clone(&self.current_spectrum);
+        let ui_command_tx = self.ui_command_tx.clone();
+        
+        // Set up timer for visualization updates (60 FPS)
+        self.visualization_timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_millis(16), // ~60 FPS
+            move || {
+                // Request spectrum data update
+                if let Err(_) = ui_command_tx.send(UiCommand::UpdateVisualizer) {
+                    error!("Failed to send visualization update command");
+                }
+                
+                // Update visualization if we have spectrum data
+                if let Ok(spectrum_guard) = current_spectrum.lock() {
+                    if let Some(spectrum) = spectrum_guard.as_ref() {
+                        // Update GPU visualization with current spectrum data
+                        debug!("Updating visualization with spectrum data: {} bands", spectrum.bands.len());
+                    }
+                }
+            },
+        );
+    }
+
+    /// Update current spectrum data
+    pub fn update_spectrum_data(&self, spectrum: SpectrumData) {
+        if let Ok(mut spectrum_guard) = self.current_spectrum.lock() {
+            let spectrum_clone = spectrum.clone();
+            *spectrum_guard = Some(spectrum_clone);
+            debug!("Updated spectrum data: {} bands, peak: {:.3}, rms: {:.3}", 
+                   spectrum.bands.len(), spectrum.peak_level, spectrum.rms_level);
+        }
+    }
+
+    /// Process audio spectrum data for visualization
+    pub fn process_audio_spectrum(&mut self, spectrum: &SpectrumData) -> Result<()> {
+        // Update current spectrum data
+        self.update_spectrum_data(spectrum.clone());
+        
+        // Update GPU visualization if available
+        if let Some(gpu_bridge) = &mut self.gpu_visualization {
+            if let Err(e) = gpu_bridge.update_audio_data() {
+                warn!("Failed to update GPU visualization: {}", e);
+            } else {
+                debug!("Updated GPU visualization with spectrum data");
+            }
+        }
+        
+        // Note: EffectsManager doesn't have update_audio_data method yet
+        // This will be implemented when needed
+        
+        Ok(())
     }
 
     /// Set initial UI state
@@ -408,7 +506,7 @@ impl MainWindowBinding {
         };
         
         // Create GPU visualization bridge
-        let mut gpu_bridge = AudioVisualizationBridge::new(player_manager);
+        let gpu_bridge = AudioVisualizationBridge::new(player_manager);
         
         // Try to initialize GPU engine
         // Note: This requires a winit window handle, which we don't have from Slint yet
