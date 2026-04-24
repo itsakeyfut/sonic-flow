@@ -1,0 +1,47 @@
+[package]
+name = "sonic-visualizer"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Audio visualization engine for Sonic Flow music player"
+
+[dependencies]
+# Core dependency
+sonic-core = { path = "../sonic-core" }
+
+# Audio processing
+rustfft.workspace = true
+
+# Graphics and UI
+slint.workspace = true
+
+# Async runtime
+tokio.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Utilities
+serde.workspace = true
+anyhow.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+
+[features]
+default = ["spectrum", "waveform", "circular"]
+spectrum = []
+waveform = []
+circular = []
+advanced = ["spectrum", "waveform", "circular"]
+
+# [[bench]]
+# name = "visualization"
+# harness = false
