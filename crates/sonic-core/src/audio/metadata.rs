@@ -12,6 +12,7 @@ use crate::error::AudioError;
 
 /// Comprehensive audio track metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct TrackMetadata {
     // Basic information
     pub title: Option<String>,
@@ -114,19 +115,19 @@ impl MetadataExtractor {
         let tag = Tag::read_from_path(path)
             .map_err(|e| AudioError::Metadata(format!("Failed to read ID3 tag: {}", e)))?;
 
-        let mut metadata = TrackMetadata::default();
-
-        // Basic ID3v2 tags
-        metadata.title = tag.title().map(|s| s.to_string());
-        metadata.artist = tag.artist().map(|s| s.to_string());
-        metadata.album = tag.album().map(|s| s.to_string());
-        metadata.album_artist = tag.album_artist().map(|s| s.to_string());
-        metadata.year = tag.year().map(|y| y as u32);
-        metadata.track_number = tag.track().map(|t| t as u32);
-        metadata.track_total = tag.total_tracks().map(|t| t as u32);
-        metadata.disc_number = tag.disc().map(|d| d as u32);
-        metadata.disc_total = tag.total_discs().map(|d| d as u32);
-        metadata.genre = tag.genre().map(|g| g.to_string());
+        let mut metadata = TrackMetadata {
+            title: tag.title().map(ToString::to_string),
+            artist: tag.artist().map(ToString::to_string),
+            album: tag.album().map(ToString::to_string),
+            album_artist: tag.album_artist().map(ToString::to_string),
+            year: tag.year().map(|y| y as u32),
+            track_number: tag.track(),
+            track_total: tag.total_tracks(),
+            disc_number: tag.disc(),
+            disc_total: tag.total_discs(),
+            genre: tag.genre().map(ToString::to_string),
+            ..TrackMetadata::default()
+        };
 
         // Extended tags
         for frame in tag.frames() {
@@ -226,8 +227,8 @@ impl MetadataExtractor {
 
         // Extract artwork from PICTURE blocks
         for block in tag.blocks() {
-            if let metaflac::block::BlockType::Picture = block.block_type() {
-                if let metaflac::block::Block::Picture(picture) = block {
+            if let metaflac::block::BlockType::Picture = block.block_type()
+                && let metaflac::block::Block::Picture(picture) = block {
                     metadata.artwork = Some(ArtworkInfo {
                         mime_type: picture.mime_type.clone(),
                         description: Some(picture.description.clone()),
@@ -238,7 +239,6 @@ impl MetadataExtractor {
                     });
                     break; // Use first picture found
                 }
-            }
         }
 
         // Get file information
@@ -259,16 +259,14 @@ impl MetadataExtractor {
             .map_err(|e| AudioError::Metadata(format!("Failed to open WAV file: {}", e)))?;
 
         let spec = reader.spec();
-        let mut metadata = TrackMetadata::default();
-
-        // Technical information from WAV header
-        metadata.sample_rate = Some(spec.sample_rate);
-        metadata.channels = Some(spec.channels);
-        metadata.bit_depth = Some(spec.bits_per_sample);
-
-        // Calculate duration
-        let duration_secs = reader.duration() as f64 / spec.sample_rate as f64;
-        metadata.duration = Some(Duration::from_secs_f64(duration_secs));
+        let duration_secs = f64::from(reader.duration()) / f64::from(spec.sample_rate);
+        let mut metadata = TrackMetadata {
+            sample_rate: Some(spec.sample_rate),
+            channels: Some(spec.channels),
+            bit_depth: Some(spec.bits_per_sample),
+            duration: Some(Duration::from_secs_f64(duration_secs)),
+            ..TrackMetadata::default()
+        };
 
         // Get file information
         let file_info = std::fs::metadata(path)
@@ -331,8 +329,8 @@ impl MetadataExtractor {
         let mut metadata = TrackMetadata::default();
 
         // Extract metadata from Symphonia
-        if let Some(symphonia_metadata) = probed.metadata.get() {
-            if let Some(current) = symphonia_metadata.current() {
+        if let Some(symphonia_metadata) = probed.metadata.get()
+            && let Some(current) = symphonia_metadata.current() {
                 for tag in current.tags() {
                     match tag.key.as_str() {
                         "TITLE" => metadata.title = Some(tag.value.to_string()),
@@ -349,7 +347,6 @@ impl MetadataExtractor {
                     }
                 }
             }
-        }
 
         Ok(metadata)
     }
@@ -402,36 +399,6 @@ impl MetadataExtractor {
     }
 }
 
-impl Default for TrackMetadata {
-    fn default() -> Self {
-        Self {
-            title: None,
-            artist: None,
-            album: None,
-            album_artist: None,
-            year: None,
-            track_number: None,
-            track_total: None,
-            disc_number: None,
-            disc_total: None,
-            genre: None,
-            composer: None,
-            performer: None,
-            conductor: None,
-            comment: None,
-            duration: None,
-            bitrate: None,
-            sample_rate: None,
-            channels: None,
-            bit_depth: None,
-            file_size: None,
-            format: None,
-            encoding: None,
-            artwork: None,
-            custom_tags: std::collections::HashMap::new(),
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

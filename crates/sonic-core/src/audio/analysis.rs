@@ -1,12 +1,45 @@
-//! FFT (Fast Fourier Transform) implementation for audio analysis
+//! Audio analysis and spectrum processing.
 //!
-//! This module provides real-time FFT processing for spectrum analysis
-//! used by the visualizer system.
+//! Provides real-time FFT processing for the visualizer system.
 
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
-use super::SpectrumData;
+/// Spectrum analysis data
+#[derive(Debug, Clone)]
+pub struct SpectrumData {
+    /// Frequency bands (typically 32, 64, or 128)
+    pub bands: Vec<f32>,
+    /// Peak level (-1.0 to 1.0)
+    pub peak_level: f32,
+    /// RMS level (0.0 to 1.0)
+    pub rms_level: f32,
+    /// Timestamp when data was captured
+    pub timestamp: Instant,
+}
+
+impl SpectrumData {
+    /// Create new spectrum data.
+    pub fn new(bands: Vec<f32>, peak_level: f32, rms_level: f32) -> Self {
+        Self {
+            bands,
+            peak_level,
+            rms_level,
+            timestamp: Instant::now(),
+        }
+    }
+
+    /// Number of frequency bands.
+    pub fn band_count(&self) -> usize {
+        self.bands.len()
+    }
+
+    /// Returns true if the data is within `max_age`.
+    pub fn is_recent(&self, max_age: Duration) -> bool {
+        self.timestamp.elapsed() <= max_age
+    }
+}
 
 /// Window function types for FFT processing
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,8 +60,6 @@ pub enum WindowFunction {
 pub struct SpectrumAnalyzer {
     /// FFT size (must be power of 2)
     fft_size: usize,
-    /// FFT planner for creating FFT instances
-    planner: FftPlanner<f32>,
     /// FFT instance
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
     /// Input buffer for FFT
@@ -73,7 +104,6 @@ impl SpectrumAnalyzer {
 
         Self {
             fft_size,
-            planner,
             fft,
             input_buffer: vec![Complex::new(0.0, 0.0); fft_size],
             output_buffer: vec![Complex::new(0.0, 0.0); fft_size],
@@ -244,13 +274,9 @@ impl SpectrumAnalyzer {
                 ((end_freq / bin_frequency_step) as usize + 1).min(magnitude_spectrum.len());
 
             if start_bin < end_bin && band_idx < bands.len() {
-                let mut sum = 0.0;
-                let mut count = 0;
-
-                for bin_idx in start_bin..end_bin {
-                    sum += magnitude_spectrum[bin_idx];
-                    count += 1;
-                }
+                let slice = &magnitude_spectrum[start_bin..end_bin];
+                let count = slice.len();
+                let sum: f32 = slice.iter().sum();
 
                 if count > 0 {
                     bands[band_idx] = sum / count as f32;

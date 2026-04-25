@@ -4,14 +4,13 @@
 //! that works with Slint's single-threaded UI model.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
 use crate::audio::traits::{AudioFormat, AudioFormatType};
 use crate::error::AudioError;
-use crate::audio::simple_player::SimplePlayer;
+use crate::audio::player::Player;
 
 /// Commands for the audio player manager
 #[derive(Debug)]
@@ -197,7 +196,11 @@ impl PlayerManager {
     pub async fn get_status(&self) -> PlayerStatus {
         let (response_tx, response_rx) = oneshot::channel();
         
-        if let Err(_) = self.command_tx.send(PlayerCommand::GetStatus { response: response_tx }) {
+        if self
+            .command_tx
+            .send(PlayerCommand::GetStatus { response: response_tx })
+            .is_err()
+        {
             warn!("Failed to send status request");
             return PlayerStatus::default();
         }
@@ -207,7 +210,7 @@ impl PlayerManager {
 
     /// Shutdown the player manager
     pub async fn shutdown(&self) {
-        if let Err(_) = self.command_tx.send(PlayerCommand::Shutdown) {
+        if self.command_tx.send(PlayerCommand::Shutdown).is_err() {
             warn!("Failed to send shutdown command");
         }
     }
@@ -216,7 +219,7 @@ impl PlayerManager {
     async fn player_thread_main(mut command_rx: mpsc::UnboundedReceiver<PlayerCommand>) {
         info!("Player thread started");
         
-        let mut player: Option<SimplePlayer> = None;
+        let mut player: Option<Player> = None;
         let mut current_track: Option<PathBuf> = None;
         let mut current_volume = 0.8f32;
 
@@ -308,7 +311,7 @@ impl PlayerManager {
                 PlayerCommand::Seek { position, response } => {
                     debug!("Seek to: {:?}", position);
                     
-                    // TODO: Implement seeking when SimplePlayer supports it
+                    // TODO: Implement seeking when Player supports it
                     let result = Err(AudioError::UnsupportedFormat {
                         format: "seek_not_implemented".to_string(),
                     });
@@ -344,7 +347,7 @@ impl PlayerManager {
     }
 
     /// Load a file into the player
-    async fn load_file(player: &mut Option<SimplePlayer>, path: &Path) -> Result<(), AudioError> {
+    async fn load_file(player: &mut Option<Player>, path: &Path) -> Result<(), AudioError> {
         // Validate file exists and is supported
         if !path.exists() {
             return Err(AudioError::Streaming(format!(
@@ -370,7 +373,7 @@ impl PlayerManager {
 
         // Initialize player if needed
         if player.is_none() {
-            *player = Some(SimplePlayer::new()?);
+            *player = Some(Player::new()?);
         }
 
         // Load and play the file

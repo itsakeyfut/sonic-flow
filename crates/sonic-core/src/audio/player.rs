@@ -1,19 +1,17 @@
-//! Simple MP3 player for testing
-//!
-//! This module provides a minimal implementation to test MP3 playback
-//! functionality without the complex application architecture.
+//! Rodio-based audio player.
 
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
 
 use rodio::{Decoder, OutputStream, Sink, Source};
-use tracing::{error, info};
+use tracing::info;
 
+use crate::audio::traits::AudioFormatType;
 use crate::error::AudioError;
 
-/// Simple MP3 player for testing
-pub struct SimplePlayer {
+/// Audio player backed by rodio.
+pub struct Player {
     /// Audio output stream
     _stream: OutputStream,
     /// Stream handle for creating sinks
@@ -22,10 +20,10 @@ pub struct SimplePlayer {
     sink: Option<Sink>,
 }
 
-unsafe impl Send for SimplePlayer {}
-unsafe impl Sync for SimplePlayer {}
+unsafe impl Send for Player {}
+unsafe impl Sync for Player {}
 
-impl SimplePlayer {
+impl Player {
     /// Create a new simple player
     pub fn new() -> Result<Self, AudioError> {
         let (stream, stream_handle) = OutputStream::try_default()
@@ -38,11 +36,10 @@ impl SimplePlayer {
         })
     }
 
-    /// Load and play an MP3 file
+    /// Load and play an audio file.
     pub async fn play_file(&mut self, path: &Path) -> Result<(), AudioError> {
-        info!("Loading MP3 file: {}", path.display());
+        info!("Loading audio file: {}", path.display());
 
-        // Check if file exists
         if !path.exists() {
             return Err(AudioError::Streaming(format!(
                 "File not found: {}",
@@ -50,34 +47,30 @@ impl SimplePlayer {
             )));
         }
 
-        // Check file extension
-        if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
-            if !extension.eq_ignore_ascii_case("mp3") {
-                return Err(AudioError::UnsupportedFormat {
-                    format: extension.to_string(),
-                });
-            }
-        } else {
-            return Err(AudioError::UnsupportedFormat {
+        let extension = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| AudioError::UnsupportedFormat {
                 format: "unknown".to_string(),
+            })?;
+
+        if !AudioFormatType::from_extension(extension).is_supported() {
+            return Err(AudioError::UnsupportedFormat {
+                format: extension.to_string(),
             });
         }
 
-        // Open the file
         let file = std::fs::File::open(path).map_err(|e| {
             AudioError::Streaming(format!("Failed to open file {}: {}", path.display(), e))
         })?;
 
-        // Create decoder
-        let source = Decoder::new(std::io::BufReader::new(file)).map_err(|e| {
-            AudioError::Streaming(format!("Failed to decode MP3 file: {}", e))
-        })?;
+        let source = Decoder::new(std::io::BufReader::new(file))
+            .map_err(|e| AudioError::Streaming(format!("Failed to decode file: {}", e)))?;
 
-        // Get audio info
         let sample_rate = source.sample_rate();
         let channels = source.channels();
         info!(
-            "MP3 file info - Sample rate: {} Hz, Channels: {}",
+            "Audio file info - Sample rate: {} Hz, Channels: {}",
             sample_rate, channels
         );
 
@@ -150,7 +143,7 @@ impl SimplePlayer {
     }
 }
 
-impl Drop for SimplePlayer {
+impl Drop for Player {
     fn drop(&mut self) {
         self.stop();
     }
@@ -162,9 +155,9 @@ mod tests {
     use std::path::PathBuf;
 
     #[tokio::test]
-    async fn test_simple_player_creation() {
+    async fn test_player_creation() {
         // Test creating a simple player
-        let result = SimplePlayer::new();
+        let result = Player::new();
         match result {
             Ok(_player) => {
                 // Player creation successful
@@ -179,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mp3_file_validation() {
-        if let Ok(mut player) = SimplePlayer::new() {
+        if let Ok(mut player) = Player::new() {
             // Test with non-existent file
             let result = player.play_file(&PathBuf::from("nonexistent.mp3")).await;
             assert!(result.is_err());
