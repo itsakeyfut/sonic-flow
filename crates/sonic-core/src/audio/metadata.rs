@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::AudioError;
 
 /// Comprehensive audio track metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrackMetadata {
     // Basic information
     pub title: Option<String>,
@@ -228,17 +227,18 @@ impl MetadataExtractor {
         // Extract artwork from PICTURE blocks
         for block in tag.blocks() {
             if let metaflac::block::BlockType::Picture = block.block_type()
-                && let metaflac::block::Block::Picture(picture) = block {
-                    metadata.artwork = Some(ArtworkInfo {
-                        mime_type: picture.mime_type.clone(),
-                        description: Some(picture.description.clone()),
-                        artwork_type: Self::convert_flac_picture_type(picture.picture_type),
-                        width: Some(picture.width),
-                        height: Some(picture.height),
-                        data: picture.data.clone(),
-                    });
-                    break; // Use first picture found
-                }
+                && let metaflac::block::Block::Picture(picture) = block
+            {
+                metadata.artwork = Some(ArtworkInfo {
+                    mime_type: picture.mime_type.clone(),
+                    description: Some(picture.description.clone()),
+                    artwork_type: Self::convert_flac_picture_type(picture.picture_type),
+                    width: Some(picture.width),
+                    height: Some(picture.height),
+                    data: picture.data.clone(),
+                });
+                break; // Use first picture found
+            }
         }
 
         // Get file information
@@ -330,23 +330,24 @@ impl MetadataExtractor {
 
         // Extract metadata from Symphonia
         if let Some(symphonia_metadata) = probed.metadata.get()
-            && let Some(current) = symphonia_metadata.current() {
-                for tag in current.tags() {
-                    match tag.key.as_str() {
-                        "TITLE" => metadata.title = Some(tag.value.to_string()),
-                        "ARTIST" => metadata.artist = Some(tag.value.to_string()),
-                        "ALBUM" => metadata.album = Some(tag.value.to_string()),
-                        "DATE" => metadata.year = tag.value.to_string().parse().ok(),
-                        "TRACK" => metadata.track_number = tag.value.to_string().parse().ok(),
-                        "GENRE" => metadata.genre = Some(tag.value.to_string()),
-                        _ => {
-                            metadata
-                                .custom_tags
-                                .insert(tag.key.clone(), tag.value.to_string());
-                        }
+            && let Some(current) = symphonia_metadata.current()
+        {
+            for tag in current.tags() {
+                match tag.key.as_str() {
+                    "TITLE" => metadata.title = Some(tag.value.to_string()),
+                    "ARTIST" => metadata.artist = Some(tag.value.to_string()),
+                    "ALBUM" => metadata.album = Some(tag.value.to_string()),
+                    "DATE" => metadata.year = tag.value.to_string().parse().ok(),
+                    "TRACK" => metadata.track_number = tag.value.to_string().parse().ok(),
+                    "GENRE" => metadata.genre = Some(tag.value.to_string()),
+                    _ => {
+                        metadata
+                            .custom_tags
+                            .insert(tag.key.clone(), tag.value.to_string());
                     }
                 }
             }
+        }
 
         Ok(metadata)
     }
@@ -398,7 +399,6 @@ impl MetadataExtractor {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
