@@ -2,7 +2,7 @@
 //!
 //! Provides real-time FFT processing for the visualizer system.
 
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::{FftPlanner, num_complex::Complex};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 

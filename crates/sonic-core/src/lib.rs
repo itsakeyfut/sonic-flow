@@ -7,5 +7,8 @@
 pub mod audio;
 pub mod error;
 
-pub use audio::{AudioFormat, AudioFormatType, PlayerManager, PlayerStatus};
+pub use audio::{
+    AudioBuffer, AudioDecoder, AudioFormat, AudioFormatInfo, AudioFormatType, PlayerManager,
+    PlayerStatus, SymphoniaDecoder,
+};
 pub use error::{AudioError, Error, Result};

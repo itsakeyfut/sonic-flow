@@ -1,108 +1,138 @@
-//! Rodio-based audio player.
+//! Rodio-backed audio player.
+//!
+//! Wraps a `rodio::Sink` and drives it with a [`SymphoniaDecoder`] source.
+//! Seeking is implemented by re-opening the file, seeking the decoder, and
+//! replacing the sink's source.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tokio::time::sleep;
 
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{OutputStream, Sink};
 use tracing::info;
 
-use crate::audio::traits::AudioFormatType;
+use crate::audio::decoder::{AudioDecoder, AudioFormatInfo, SymphoniaDecoder};
 use crate::error::AudioError;
 
-/// Audio player backed by rodio.
+/// Audio player backed by a `rodio::Sink`.
+///
+/// Not `Clone` — intended to be owned by the audio thread inside
+/// [`super::player_manager::PlayerManager`].
 pub struct Player {
-    /// Audio output stream
+    /// Kept alive to maintain the audio output stream.
     _stream: OutputStream,
-    /// Stream handle for creating sinks
     stream_handle: rodio::OutputStreamHandle,
-    /// Current audio sink
     sink: Option<Sink>,
+    /// Path of the currently loaded file, required for seek re-opening.
+    current_path: Option<PathBuf>,
+    /// Volume applied to every new sink (0.0 – 1.0).
+    volume: f32,
 }
 
+// OutputStreamHandle is Send but OutputStream is not — we own both exclusively.
 unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
 
 impl Player {
-    /// Create a new simple player
+    /// Create a new player connected to the default audio output device.
     pub fn new() -> Result<Self, AudioError> {
         let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| AudioError::Device(format!("Failed to initialize audio output: {}", e)))?;
+            .map_err(|e| AudioError::Device(format!("Failed to initialise audio output: {e}")))?;
 
         Ok(Self {
             _stream: stream,
             stream_handle,
             sink: None,
+            current_path: None,
+            volume: 0.8,
         })
     }
 
-    /// Load and play an audio file.
-    pub async fn play_file(&mut self, path: &Path) -> Result<(), AudioError> {
+    /// Load and immediately begin playing an audio file.
+    ///
+    /// Stops any current playback before opening the new file.
+    /// Returns [`AudioFormatInfo`] with the stream's sample rate, channel
+    /// count, bit depth, and duration.
+    pub fn play_file(&mut self, path: &Path) -> Result<AudioFormatInfo, AudioError> {
         info!("Loading audio file: {}", path.display());
 
-        if !path.exists() {
-            return Err(AudioError::Streaming(format!(
-                "File not found: {}",
-                path.display()
-            )));
+        // Stop existing sink before creating a new one.
+        if let Some(old) = self.sink.take() {
+            old.stop();
         }
 
-        let extension = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| AudioError::UnsupportedFormat {
-                format: "unknown".to_string(),
-            })?;
+        let decoder = SymphoniaDecoder::open(path)?;
+        let info = decoder.format_info();
 
-        if !AudioFormatType::from_extension(extension).is_supported() {
-            return Err(AudioError::UnsupportedFormat {
-                format: extension.to_string(),
-            });
-        }
-
-        let file = std::fs::File::open(path).map_err(|e| {
-            AudioError::Streaming(format!("Failed to open file {}: {}", path.display(), e))
-        })?;
-
-        let source = Decoder::new(std::io::BufReader::new(file))
-            .map_err(|e| AudioError::Streaming(format!("Failed to decode file: {}", e)))?;
-
-        let sample_rate = source.sample_rate();
-        let channels = source.channels();
         info!(
-            "Audio file info - Sample rate: {} Hz, Channels: {}",
-            sample_rate, channels
+            "Opened: {} Hz, {} ch, {:?} bit, codec={}, duration={:?}",
+            info.sample_rate, info.channels, info.bit_depth, info.codec_name, info.duration,
         );
 
-        // Create sink
-        let sink = Sink::try_new(&self.stream_handle).map_err(|e| {
-            AudioError::Device(format!("Failed to create audio sink: {}", e))
-        })?;
-
-        // Set volume
-        sink.set_volume(0.8);
-
-        // Add source to sink and play
-        sink.append(source);
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AudioError::Device(format!("Failed to create audio sink: {e}")))?;
+        sink.set_volume(self.volume);
+        sink.append(decoder);
         sink.play();
 
-        // Store sink
         self.sink = Some(sink);
+        self.current_path = Some(path.to_owned());
 
-        info!("MP3 playback started");
-        Ok(())
+        Ok(info)
     }
 
-    /// Stop playback
+    /// Seek to `position` within the currently loaded file.
+    ///
+    /// Implemented by re-opening the decoder, seeking it, then swapping the
+    /// sink's source. Preserves the current pause/play state.
+    ///
+    /// Returns the actual position seeked to (may differ from requested due to
+    /// keyframe alignment).
+    pub fn seek(&mut self, position: Duration) -> Result<Duration, AudioError> {
+        let path = self
+            .current_path
+            .clone()
+            .ok_or_else(|| AudioError::InvalidState {
+                from: "no_file_loaded".into(),
+                to: "seek".into(),
+            })?;
+
+        let was_paused = self.sink.as_ref().map(|s| s.is_paused()).unwrap_or(false);
+
+        // Open a fresh decoder and seek it to the requested position.
+        let mut decoder = SymphoniaDecoder::open(&path)?;
+        let actual = decoder.seek(position)?;
+
+        // Replace the sink with a new one using the seeked decoder.
+        if let Some(old) = self.sink.take() {
+            old.stop();
+        }
+
+        let sink = Sink::try_new(&self.stream_handle).map_err(|e| {
+            AudioError::Device(format!("Failed to create audio sink after seek: {e}"))
+        })?;
+        sink.set_volume(self.volume);
+        sink.append(decoder);
+        // Restore pause state — Sink starts playing by default after append.
+        if was_paused {
+            sink.pause();
+        }
+
+        self.sink = Some(sink);
+
+        info!("Seeked to {:?} (requested {:?})", actual, position);
+        Ok(actual)
+    }
+
+    /// Stop playback and release the current source.
     pub fn stop(&mut self) {
-        if let Some(sink) = &self.sink {
+        if let Some(sink) = self.sink.take() {
             sink.stop();
             info!("Playback stopped");
         }
-        self.sink = None;
+        self.current_path = None;
     }
 
-    /// Pause playback
+    /// Pause playback. No-op when already paused or no track is loaded.
     pub fn pause(&mut self) {
         if let Some(sink) = &self.sink {
             sink.pause();
@@ -110,7 +140,7 @@ impl Player {
         }
     }
 
-    /// Resume playback
+    /// Resume playback. No-op when already playing or no track is loaded.
     pub fn resume(&mut self) {
         if let Some(sink) = &self.sink {
             sink.play();
@@ -118,28 +148,30 @@ impl Player {
         }
     }
 
-    /// Check if currently playing
+    /// Returns `true` when audio is actively playing (not paused, not empty).
     pub fn is_playing(&self) -> bool {
         self.sink
             .as_ref()
-            .map(|sink| !sink.is_paused() && !sink.empty())
+            .map(|s| !s.is_paused() && !s.empty())
             .unwrap_or(false)
     }
 
-    /// Set volume (0.0 - 1.0)
+    /// Returns `true` when the sink is paused (but may still have a source).
+    pub fn is_paused(&self) -> bool {
+        self.sink.as_ref().map(|s| s.is_paused()).unwrap_or(false)
+    }
+
+    /// Set output volume. Clamped to [0.0, 1.0]. Persists across seeks.
     pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume.clamp(0.0, 1.0);
         if let Some(sink) = &self.sink {
-            sink.set_volume(volume.clamp(0.0, 1.0));
+            sink.set_volume(self.volume);
         }
     }
 
-    /// Wait for playback to finish
-    pub async fn wait_for_finish(&self) {
-        if let Some(sink) = &self.sink {
-            while !sink.empty() {
-                sleep(Duration::from_millis(100)).await;
-            }
-        }
+    /// Returns the path of the currently loaded file, if any.
+    pub fn current_path(&self) -> Option<&Path> {
+        self.current_path.as_deref()
     }
 }
 
@@ -154,32 +186,28 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    #[tokio::test]
-    async fn test_player_creation() {
-        // Test creating a simple player
-        let result = Player::new();
-        match result {
-            Ok(_player) => {
-                // Player creation successful
-                assert!(true);
-            }
-            Err(e) => {
-                // Audio system might not be available in test environment
-                eprintln!("Audio system not available in test: {}", e);
-            }
+    #[test]
+    fn player_creation() {
+        // Audio device may not be available in CI — treat as a soft failure.
+        match Player::new() {
+            Ok(_) => {}
+            Err(e) => eprintln!("Audio device unavailable in test environment: {e}"),
         }
     }
 
-    #[tokio::test]
-    async fn test_mp3_file_validation() {
+    #[test]
+    fn play_nonexistent_file_returns_error() {
         if let Ok(mut player) = Player::new() {
-            // Test with non-existent file
-            let result = player.play_file(&PathBuf::from("nonexistent.mp3")).await;
+            let result = player.play_file(&PathBuf::from("nonexistent.mp3"));
             assert!(result.is_err());
+        }
+    }
 
-            // Test with wrong extension
-            let result = player.play_file(&PathBuf::from("test.txt")).await;
-            assert!(result.is_err());
+    #[test]
+    fn seek_without_loaded_file_returns_error() {
+        if let Ok(mut player) = Player::new() {
+            let result = player.seek(Duration::from_secs(10));
+            assert!(matches!(result, Err(AudioError::InvalidState { .. })));
         }
     }
 }
