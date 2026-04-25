@@ -45,6 +45,10 @@ pub enum AudioError {
         to: String,
     },
 
+    /// Decode error (codec or container level)
+    #[error("decode error: {0}")]
+    Decode(String),
+
     /// Streaming / decoding error
     #[error("streaming error: {0}")]
     Streaming(String),

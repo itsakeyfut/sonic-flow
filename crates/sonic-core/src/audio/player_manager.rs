@@ -1,71 +1,66 @@
-//! Thread-safe audio player manager
+//! Thread-safe audio player manager.
 //!
-//! This module provides a thread-safe wrapper around audio playback functionality
-//! that works with Slint's single-threaded UI model.
+//! Bridges Slint's single-threaded UI model with the audio [`Player`] that
+//! runs on a dedicated tokio task. Commands are sent over an unbounded channel
+//! and responses are returned via one-shot channels.
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
-use crate::audio::traits::{AudioFormat, AudioFormatType};
-use crate::error::AudioError;
+use crate::audio::decoder::AudioFormatInfo;
 use crate::audio::player::Player;
+use crate::audio::traits::AudioFormat;
+use crate::error::AudioError;
 
-/// Commands for the audio player manager
+// ---------------------------------------------------------------------------
+// Command / Status types
+// ---------------------------------------------------------------------------
+
+/// Commands sent to the player task.
 #[derive(Debug)]
 pub enum PlayerCommand {
-    /// Load and play a file
     LoadAndPlay {
         path: PathBuf,
         response: oneshot::Sender<Result<(), AudioError>>,
     },
-    /// Start playback
     Play {
         response: oneshot::Sender<Result<(), AudioError>>,
     },
-    /// Pause playback
     Pause {
         response: oneshot::Sender<Result<(), AudioError>>,
     },
-    /// Stop playback
     Stop {
         response: oneshot::Sender<Result<(), AudioError>>,
     },
-    /// Set volume (0.0 - 1.0)
     SetVolume {
         volume: f32,
         response: oneshot::Sender<Result<(), AudioError>>,
     },
-    /// Seek to position
     Seek {
         position: Duration,
-        response: oneshot::Sender<Result<(), AudioError>>,
+        response: oneshot::Sender<Result<Duration, AudioError>>,
     },
-    /// Get current player status
     GetStatus {
         response: oneshot::Sender<PlayerStatus>,
     },
-    /// Shutdown the player manager
     Shutdown,
 }
 
-/// Current status of the audio player
+/// Snapshot of the audio player's current state.
 #[derive(Debug, Clone)]
 pub struct PlayerStatus {
-    /// Whether audio is currently playing
     pub is_playing: bool,
-    /// Whether audio is paused
     pub is_paused: bool,
-    /// Current volume (0.0 - 1.0)
     pub volume: f32,
-    /// Currently loaded track path
     pub current_track: Option<PathBuf>,
-    /// Current playback position
+    /// Current playback position (approximate, based on elapsed wall time).
     pub position: Duration,
-    /// Total duration (if known)
+    /// Total duration of the loaded track, if known.
     pub duration: Option<Duration>,
-    /// Audio format information
+    /// Audio format information for the loaded track.
     pub format: Option<AudioFormat>,
 }
 
@@ -83,23 +78,23 @@ impl Default for PlayerStatus {
     }
 }
 
-/// Thread-safe audio player manager
+// ---------------------------------------------------------------------------
+// PlayerManager
+// ---------------------------------------------------------------------------
+
+/// Thread-safe handle to the audio player task.
 pub struct PlayerManager {
-    /// Command sender for communication with the player thread
     command_tx: mpsc::UnboundedSender<PlayerCommand>,
-    /// Join handle for the player thread
     _player_thread: tokio::task::JoinHandle<()>,
 }
 
 impl PlayerManager {
-    /// Create a new player manager
+    /// Spawn the audio player task and return a handle.
     pub fn new() -> Result<Self, AudioError> {
-        info!("Initializing player manager");
+        info!("Initialising player manager");
 
         let (command_tx, command_rx) = mpsc::unbounded_channel();
-
-        // Spawn the player thread
-        let player_thread = tokio::spawn(Self::player_thread_main(command_rx));
+        let player_thread = tokio::spawn(Self::player_task(command_rx));
 
         Ok(Self {
             command_tx,
@@ -107,234 +102,246 @@ impl PlayerManager {
         })
     }
 
-    /// Load and play an audio file
+    // ------------------------------------------------------------------
+    // Public async API
+    // ------------------------------------------------------------------
+
     pub async fn load_and_play(&self, path: PathBuf) -> Result<(), AudioError> {
-        let (response_tx, response_rx) = oneshot::channel();
-        
-        self.command_tx
-            .send(PlayerCommand::LoadAndPlay { path, response: response_tx })
-            .map_err(|_| AudioError::InvalidState {
-                from: "player_manager".to_string(),
-                to: "load_and_play".to_string(),
-            })?;
-
-        response_rx.await.map_err(|_| AudioError::InvalidState {
-            from: "player_manager".to_string(),
-            to: "load_and_play_response".to_string(),
-        })?
+        self.send_recv(|tx| PlayerCommand::LoadAndPlay { path, response: tx })
+            .await
     }
 
-    /// Start playback
     pub async fn play(&self) -> Result<(), AudioError> {
-        let (response_tx, response_rx) = oneshot::channel();
-        
-        self.command_tx
-            .send(PlayerCommand::Play { response: response_tx })
-            .map_err(|_| AudioError::InvalidState {
-                from: "player_manager".to_string(),
-                to: "play".to_string(),
-            })?;
-
-        response_rx.await.map_err(|_| AudioError::InvalidState {
-            from: "player_manager".to_string(),
-            to: "play_response".to_string(),
-        })?
+        self.send_recv(|tx| PlayerCommand::Play { response: tx })
+            .await
     }
 
-    /// Pause playback
     pub async fn pause(&self) -> Result<(), AudioError> {
-        let (response_tx, response_rx) = oneshot::channel();
-        
-        self.command_tx
-            .send(PlayerCommand::Pause { response: response_tx })
-            .map_err(|_| AudioError::InvalidState {
-                from: "player_manager".to_string(),
-                to: "pause".to_string(),
-            })?;
-
-        response_rx.await.map_err(|_| AudioError::InvalidState {
-            from: "player_manager".to_string(),
-            to: "pause_response".to_string(),
-        })?
+        self.send_recv(|tx| PlayerCommand::Pause { response: tx })
+            .await
     }
 
-    /// Stop playback
     pub async fn stop(&self) -> Result<(), AudioError> {
-        let (response_tx, response_rx) = oneshot::channel();
-        
-        self.command_tx
-            .send(PlayerCommand::Stop { response: response_tx })
-            .map_err(|_| AudioError::InvalidState {
-                from: "player_manager".to_string(),
-                to: "stop".to_string(),
-            })?;
-
-        response_rx.await.map_err(|_| AudioError::InvalidState {
-            from: "player_manager".to_string(),
-            to: "stop_response".to_string(),
-        })?
+        self.send_recv(|tx| PlayerCommand::Stop { response: tx })
+            .await
     }
 
-    /// Set volume
     pub async fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
-        let (response_tx, response_rx) = oneshot::channel();
-        
-        self.command_tx
-            .send(PlayerCommand::SetVolume { volume, response: response_tx })
-            .map_err(|_| AudioError::InvalidState {
-                from: "player_manager".to_string(),
-                to: "set_volume".to_string(),
-            })?;
-
-        response_rx.await.map_err(|_| AudioError::InvalidState {
-            from: "player_manager".to_string(),
-            to: "set_volume_response".to_string(),
-        })?
+        self.send_recv(|tx| PlayerCommand::SetVolume {
+            volume,
+            response: tx,
+        })
+        .await
     }
 
-    /// Get current player status
+    /// Seek to the given position. Returns the actual position seeked to.
+    pub async fn seek(&self, position: Duration) -> Result<Duration, AudioError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(PlayerCommand::Seek {
+                position,
+                response: tx,
+            })
+            .map_err(|_| self.dead_err("seek"))?;
+        rx.await.map_err(|_| self.dead_err("seek_response"))?
+    }
+
     pub async fn get_status(&self) -> PlayerStatus {
-        let (response_tx, response_rx) = oneshot::channel();
-        
+        let (tx, rx) = oneshot::channel();
         if self
             .command_tx
-            .send(PlayerCommand::GetStatus { response: response_tx })
+            .send(PlayerCommand::GetStatus { response: tx })
             .is_err()
         {
-            warn!("Failed to send status request");
+            warn!("Player task has stopped; returning default status");
             return PlayerStatus::default();
         }
-
-        response_rx.await.unwrap_or_default()
+        rx.await.unwrap_or_default()
     }
 
-    /// Shutdown the player manager
     pub async fn shutdown(&self) {
-        if self.command_tx.send(PlayerCommand::Shutdown).is_err() {
-            warn!("Failed to send shutdown command");
+        let _ = self.command_tx.send(PlayerCommand::Shutdown);
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    fn dead_err(&self, op: &str) -> AudioError {
+        AudioError::InvalidState {
+            from: "player_manager".into(),
+            to: op.into(),
         }
     }
 
-    /// Main loop for the player thread
-    async fn player_thread_main(mut command_rx: mpsc::UnboundedReceiver<PlayerCommand>) {
-        info!("Player thread started");
-        
+    /// Send a command that has a `Result<T, AudioError>` response channel.
+    async fn send_recv<F, T>(&self, make_cmd: F) -> Result<T, AudioError>
+    where
+        F: FnOnce(oneshot::Sender<Result<T, AudioError>>) -> PlayerCommand,
+    {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(make_cmd(tx))
+            .map_err(|_| self.dead_err("send"))?;
+        rx.await.map_err(|_| self.dead_err("recv"))?
+    }
+
+    // ------------------------------------------------------------------
+    // Player task (runs on a tokio thread)
+    // ------------------------------------------------------------------
+
+    async fn player_task(mut rx: mpsc::UnboundedReceiver<PlayerCommand>) {
+        info!("Player task started");
+
+        // All mutable state lives here — no locking required.
         let mut player: Option<Player> = None;
         let mut current_track: Option<PathBuf> = None;
-        let mut current_volume = 0.8f32;
+        let mut current_volume = 0.8_f32;
+        let mut current_format: Option<AudioFormatInfo> = None;
 
-        while let Some(command) = command_rx.recv().await {
-            match command {
+        // Position tracking: position = seek_base + elapsed since play_start.
+        let mut seek_base = Duration::ZERO;
+        let mut play_start: Option<Instant> = None;
+
+        while let Some(cmd) = rx.recv().await {
+            match cmd {
                 PlayerCommand::LoadAndPlay { path, response } => {
-                    debug!("Loading and playing: {}", path.display());
-                    
-                    let result = match Self::load_file(&mut player, &path).await {
-                        Ok(_) => {
+                    debug!("LoadAndPlay: {}", path.display());
+
+                    let result = Self::ensure_player(&mut player).and_then(|p| p.play_file(&path));
+
+                    let result = match result {
+                        Ok(info) => {
                             current_track = Some(path.clone());
+                            current_format = Some(info);
+                            seek_base = Duration::ZERO;
+                            play_start = Some(Instant::now());
                             if let Some(p) = &mut player {
                                 p.set_volume(current_volume);
                             }
                             Ok(())
                         }
                         Err(e) => {
-                            error!("Failed to load file: {}", e);
+                            error!("Failed to load '{}': {e}", path.display());
                             Err(e)
                         }
                     };
-                    
+
                     let _ = response.send(result);
                 }
 
                 PlayerCommand::Play { response } => {
-                    debug!("Play command received");
-                    
                     let result = if let Some(p) = &mut player {
                         p.resume();
+                        play_start = Some(Instant::now());
                         Ok(())
                     } else {
                         Err(AudioError::InvalidState {
-                            from: "no_player".to_string(),
-                            to: "play".to_string(),
+                            from: "idle".into(),
+                            to: "play".into(),
                         })
                     };
-                    
                     let _ = response.send(result);
                 }
 
                 PlayerCommand::Pause { response } => {
-                    debug!("Pause command received");
-                    
                     let result = if let Some(p) = &mut player {
+                        // Snapshot position before pausing.
+                        if let Some(start) = play_start.take() {
+                            seek_base += start.elapsed();
+                        }
                         p.pause();
                         Ok(())
                     } else {
                         Err(AudioError::InvalidState {
-                            from: "no_player".to_string(),
-                            to: "pause".to_string(),
+                            from: "idle".into(),
+                            to: "pause".into(),
                         })
                     };
-                    
                     let _ = response.send(result);
                 }
 
                 PlayerCommand::Stop { response } => {
-                    debug!("Stop command received");
-                    
-                    let result = if let Some(p) = &mut player {
+                    if let Some(p) = &mut player {
                         p.stop();
-                        Ok(())
-                    } else {
-                        Err(AudioError::InvalidState {
-                            from: "no_player".to_string(),
-                            to: "stop".to_string(),
-                        })
-                    };
-                    
-                    let _ = response.send(result);
+                    }
+                    current_track = None;
+                    current_format = None;
+                    seek_base = Duration::ZERO;
+                    play_start = None;
+                    let _ = response.send(Ok(()));
                 }
 
                 PlayerCommand::SetVolume { volume, response } => {
-                    debug!("Set volume to: {:.2}", volume);
-                    
                     current_volume = volume.clamp(0.0, 1.0);
-                    
-                    let result = if let Some(p) = &mut player {
+                    if let Some(p) = &mut player {
                         p.set_volume(current_volume);
-                        Ok(())
-                    } else {
-                        Ok(()) // Store volume for when player is created
-                    };
-                    
-                    let _ = response.send(result);
+                    }
+                    let _ = response.send(Ok(()));
                 }
 
                 PlayerCommand::Seek { position, response } => {
-                    debug!("Seek to: {:?}", position);
-                    
-                    // TODO: Implement seeking when Player supports it
-                    let result = Err(AudioError::UnsupportedFormat {
-                        format: "seek_not_implemented".to_string(),
-                    });
-                    
+                    let result = if let Some(p) = &mut player {
+                        match p.seek(position) {
+                            Ok(actual) => {
+                                seek_base = actual;
+                                play_start = if p.is_paused() {
+                                    None
+                                } else {
+                                    Some(Instant::now())
+                                };
+                                Ok(actual)
+                            }
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(AudioError::InvalidState {
+                            from: "idle".into(),
+                            to: "seek".into(),
+                        })
+                    };
                     let _ = response.send(result);
                 }
 
                 PlayerCommand::GetStatus { response } => {
-                    let status = PlayerStatus {
-                        is_playing: player.as_ref().map(|p| p.is_playing()).unwrap_or(false),
-                        is_paused: player.as_ref().map(|p| !p.is_playing()).unwrap_or(true),
+                    let is_playing = player.as_ref().map(|p| p.is_playing()).unwrap_or(false);
+                    let is_paused = player.as_ref().map(|p| p.is_paused()).unwrap_or(false);
+
+                    // Compute approximate playback position from wall time.
+                    let position = if is_playing {
+                        if let Some(start) = play_start {
+                            seek_base + start.elapsed()
+                        } else {
+                            seek_base
+                        }
+                    } else {
+                        seek_base
+                    };
+
+                    // Clamp to known duration to avoid overshooting.
+                    let duration = current_format.as_ref().and_then(|f| f.duration);
+                    let position = duration.map_or(position, |d| position.min(d));
+
+                    let format = current_format.as_ref().map(|f| AudioFormat {
+                        sample_rate: f.sample_rate,
+                        channels: f.channels,
+                        bit_depth: f.bit_depth.unwrap_or(16) as u16,
+                        format_type: f.format_type.clone(),
+                    });
+
+                    let _ = response.send(PlayerStatus {
+                        is_playing,
+                        is_paused,
                         volume: current_volume,
                         current_track: current_track.clone(),
-                        position: Duration::ZERO, // TODO: Get actual position
-                        duration: None, // TODO: Get actual duration
-                        format: None, // TODO: Get actual format
-                    };
-                    
-                    let _ = response.send(status);
+                        position,
+                        duration,
+                        format,
+                    });
                 }
 
                 PlayerCommand::Shutdown => {
-                    info!("Player thread shutting down");
+                    info!("Player task shutting down");
                     if let Some(p) = &mut player {
                         p.stop();
                     }
@@ -343,51 +350,20 @@ impl PlayerManager {
             }
         }
 
-        info!("Player thread ended");
+        info!("Player task ended");
     }
 
-    /// Load a file into the player
-    async fn load_file(player: &mut Option<Player>, path: &Path) -> Result<(), AudioError> {
-        // Validate file exists and is supported
-        if !path.exists() {
-            return Err(AudioError::Streaming(format!(
-                "File not found: {}",
-                path.display()
-            )));
-        }
-
-        // Check file extension
-        let extension = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| AudioError::UnsupportedFormat {
-                format: "no_extension".to_string(),
-            })?;
-
-        let format_type = AudioFormatType::from_extension(extension);
-        if !format_type.is_supported() {
-            return Err(AudioError::UnsupportedFormat {
-                format: extension.to_string(),
-            });
-        }
-
-        // Initialize player if needed
+    /// Initialise the player lazily — creates it on first use.
+    fn ensure_player(player: &mut Option<Player>) -> Result<&mut Player, AudioError> {
         if player.is_none() {
             *player = Some(Player::new()?);
         }
-
-        // Load and play the file
-        if let Some(p) = player {
-            p.play_file(path).await?;
-        }
-
-        Ok(())
+        Ok(player.as_mut().expect("just initialised"))
     }
 }
 
 impl Drop for PlayerManager {
     fn drop(&mut self) {
-        // Best effort to shutdown
         let _ = self.command_tx.send(PlayerCommand::Shutdown);
     }
 }
