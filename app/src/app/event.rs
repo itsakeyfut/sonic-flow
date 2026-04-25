@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use sonic_core::TrackMetadata;
+
 /// Events sent from the application controller to the UI.
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -15,7 +17,10 @@ pub enum Event {
         format: Option<FormatInfo>,
     },
     /// Track loaded successfully
-    TrackLoaded { path: PathBuf },
+    TrackLoaded {
+        path: PathBuf,
+        metadata: Box<TrackMetadata>,
+    },
     /// Track failed to load
     TrackLoadFailed { path: PathBuf, error: String },
     /// General error

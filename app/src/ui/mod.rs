@@ -201,15 +201,26 @@ impl Ui {
                     }
                 }
 
-                if let Some(ref path) = track_path {
-                    let name = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("Unknown");
-                    ui.set_track_title(name.into());
+                match track_path {
+                    Some(ref path) => {
+                        let name = path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Unknown");
+                        ui.set_current_track(name.into());
 
-                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                        ui.set_file_format(ext.to_uppercase().into());
+                        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                            ui.set_file_format(ext.to_uppercase().into());
+                        }
+                    }
+                    None => {
+                        ui.set_current_track("No track loaded".into());
+                        // Clear metadata when no track is loaded.
+                        ui.set_track_title("".into());
+                        ui.set_track_artist("".into());
+                        ui.set_track_album("".into());
+                        ui.set_track_year("".into());
+                        ui.set_track_genre("".into());
                     }
                 }
 
@@ -220,8 +231,19 @@ impl Ui {
                 }
             }
 
-            Event::TrackLoaded { path } => {
+            Event::TrackLoaded { path, metadata } => {
                 info!("Track loaded: {}", path.display());
+                ui.set_track_title(metadata.title.unwrap_or_default().into());
+                ui.set_track_artist(metadata.artist.unwrap_or_default().into());
+                ui.set_track_album(metadata.album.unwrap_or_default().into());
+                ui.set_track_year(
+                    metadata
+                        .year
+                        .map(|y| y.to_string())
+                        .unwrap_or_default()
+                        .into(),
+                );
+                ui.set_track_genre(metadata.genre.unwrap_or_default().into());
             }
 
             Event::TrackLoadFailed { path, error } => {

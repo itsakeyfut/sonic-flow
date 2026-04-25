@@ -8,5 +8,6 @@ pub mod player_manager;
 pub mod traits;
 
 pub use decoder::{AudioBuffer, AudioDecoder, AudioFormatInfo, SymphoniaDecoder};
+pub use metadata::{MetadataExtractor, TrackMetadata};
 pub use player_manager::{PlayerManager, PlayerStatus};
 pub use traits::{AudioFormat, AudioFormatType};
