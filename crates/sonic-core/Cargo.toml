@@ -11,57 +11,29 @@ rust-version.workspace = true
 description = "Core audio processing library for Sonic Flow music player"
 
 [dependencies]
-# Audio processing
+# Audio playback and decoding
 rodio.workspace = true
 symphonia.workspace = true
-rustfft.workspace = true
 hound.workspace = true
+
+# Metadata
+id3.workspace = true
+metaflac.workspace = true
+
+# Spectrum analysis
+rustfft.workspace = true
 
 # Async runtime
 tokio.workspace = true
-futures.workspace = true
 
 # Serialization
 serde.workspace = true
-serde_json.workspace = true
-toml.workspace = true
 
 # Logging
 tracing.workspace = true
 
-# Utilities
-uuid.workspace = true
-chrono.workspace = true
-dirs.workspace = true
-anyhow.workspace = true
+# Errors
 thiserror.workspace = true
 
-# Database
-sqlx.workspace = true
-
-# ID3 metadata
-id3.workspace = true
-
-# Additional dependencies
-async-trait.workspace = true
-parking_lot.workspace = true
-metaflac.workspace = true
-notify.workspace = true
-
 [dev-dependencies]
-criterion.workspace = true
 tempfile.workspace = true
-tokio-test.workspace = true
-
-[features]
-default = ["mp3", "flac", "wav", "ogg"]
-mp3 = ["symphonia/mp3"]
-flac = ["symphonia/flac"]
-wav = ["symphonia/wav"]
-ogg = ["symphonia/ogg", "symphonia/vorbis"]
-aac = ["symphonia/aac"]
-all-formats = ["mp3", "flac", "wav", "ogg", "aac"]
-
-# [[bench]]
-# name = "audio_processing"
-# harness = false
