@@ -8,7 +8,8 @@ pub mod audio;
 pub mod error;
 
 pub use audio::{
-    AudioBuffer, AudioDecoder, AudioFormat, AudioFormatInfo, AudioFormatType, MetadataExtractor,
-    PlayerManager, PlayerStatus, SymphoniaDecoder, TrackMetadata,
+    AudioBuffer, AudioDecoder, AudioFormat, AudioFormatInfo, AudioFormatType, DEFAULT_BAND_COUNT,
+    MetadataExtractor, PlayerManager, PlayerStatus, SpectrumAnalyzer, SpectrumData,
+    SymphoniaDecoder, TrackMetadata,
 };
 pub use error::{AudioError, Error, Result};

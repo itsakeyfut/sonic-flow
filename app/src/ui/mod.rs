@@ -251,6 +251,12 @@ impl Ui {
                 ui.set_playback_state("Error".into());
             }
 
+            Event::SpectrumUpdated { bands, peak } => {
+                let model = slint::ModelRc::new(slint::VecModel::from(bands));
+                ui.set_spectrum_bands(model);
+                ui.set_peak_level(peak);
+            }
+
             Event::Error(msg) => {
                 error!("Error: {}", msg);
                 ui.set_playback_state("Error".into());

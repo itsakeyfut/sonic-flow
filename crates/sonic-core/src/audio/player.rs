@@ -8,9 +8,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use rodio::{OutputStream, Sink};
+use tokio::sync::watch;
 use tracing::info;
 
+use crate::audio::analysis::SpectrumData;
 use crate::audio::decoder::{AudioDecoder, AudioFormatInfo, SymphoniaDecoder};
+use crate::audio::spectrum_tap::{DEFAULT_BAND_COUNT, SpectrumTap};
 use crate::error::AudioError;
 
 /// Audio player backed by a `rodio::Sink`.
@@ -26,6 +29,8 @@ pub struct Player {
     current_path: Option<PathBuf>,
     /// Volume applied to every new sink (0.0 – 1.0).
     volume: f32,
+    /// Spectrum data receiver updated by the [`SpectrumTap`] in the audio thread.
+    spectrum_rx: Option<watch::Receiver<SpectrumData>>,
 }
 
 // OutputStreamHandle is Send but OutputStream is not — we own both exclusively.
@@ -44,6 +49,7 @@ impl Player {
             sink: None,
             current_path: None,
             volume: 0.8,
+            spectrum_rx: None,
         })
     }
 
@@ -68,14 +74,19 @@ impl Player {
             info.sample_rate, info.channels, info.bit_depth, info.codec_name, info.duration,
         );
 
+        let initial = SpectrumData::new(vec![0.0; DEFAULT_BAND_COUNT], 0.0, 0.0);
+        let (tx, rx) = watch::channel(initial);
+        let tap = SpectrumTap::new(decoder, DEFAULT_BAND_COUNT, tx);
+
         let sink = Sink::try_new(&self.stream_handle)
             .map_err(|e| AudioError::Device(format!("Failed to create audio sink: {e}")))?;
         sink.set_volume(self.volume);
-        sink.append(decoder);
+        sink.append(tap);
         sink.play();
 
         self.sink = Some(sink);
         self.current_path = Some(path.to_owned());
+        self.spectrum_rx = Some(rx);
 
         Ok(info)
     }
@@ -98,11 +109,15 @@ impl Player {
 
         let was_paused = self.sink.as_ref().map(|s| s.is_paused()).unwrap_or(false);
 
-        // Open a fresh decoder and seek it to the requested position.
+        // Open a fresh decoder, seek it, then wrap in a new SpectrumTap.
         let mut decoder = SymphoniaDecoder::open(&path)?;
         let actual = decoder.seek(position)?;
 
-        // Replace the sink with a new one using the seeked decoder.
+        let initial = SpectrumData::new(vec![0.0; DEFAULT_BAND_COUNT], 0.0, 0.0);
+        let (tx, rx) = watch::channel(initial);
+        let tap = SpectrumTap::new(decoder, DEFAULT_BAND_COUNT, tx);
+
+        // Replace the sink with a new one using the seeked tap.
         if let Some(old) = self.sink.take() {
             old.stop();
         }
@@ -111,13 +126,14 @@ impl Player {
             AudioError::Device(format!("Failed to create audio sink after seek: {e}"))
         })?;
         sink.set_volume(self.volume);
-        sink.append(decoder);
+        sink.append(tap);
         // Restore pause state — Sink starts playing by default after append.
         if was_paused {
             sink.pause();
         }
 
         self.sink = Some(sink);
+        self.spectrum_rx = Some(rx);
 
         info!("Seeked to {:?} (requested {:?})", actual, position);
         Ok(actual)
@@ -130,6 +146,7 @@ impl Player {
             info!("Playback stopped");
         }
         self.current_path = None;
+        self.spectrum_rx = None;
     }
 
     /// Pause playback. No-op when already paused or no track is loaded.
@@ -172,6 +189,15 @@ impl Player {
     /// Returns the path of the currently loaded file, if any.
     pub fn current_path(&self) -> Option<&Path> {
         self.current_path.as_deref()
+    }
+
+    /// Returns a reference to the spectrum data receiver, if a track is loaded.
+    ///
+    /// The receiver always holds the most recent [`SpectrumData`] computed by
+    /// the `SpectrumTap` in the audio thread. Returns `None` when no track is
+    /// playing.
+    pub fn spectrum_rx(&self) -> Option<&watch::Receiver<SpectrumData>> {
+        self.spectrum_rx.as_ref()
     }
 }
 
