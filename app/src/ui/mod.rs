@@ -44,7 +44,9 @@ impl Ui {
             let tx = tx_cmd.clone();
             move || {
                 let tx = tx.clone();
-                tokio::spawn(async move { let _ = tx.send(Command::TogglePlayback).await; });
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::TogglePlayback).await;
+                });
             }
         });
 
@@ -52,7 +54,9 @@ impl Ui {
             let tx = tx_cmd.clone();
             move || {
                 let tx = tx.clone();
-                tokio::spawn(async move { let _ = tx.send(Command::Stop).await; });
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::Stop).await;
+                });
             }
         });
 
@@ -60,7 +64,9 @@ impl Ui {
             let tx = tx_cmd.clone();
             move || {
                 let tx = tx.clone();
-                tokio::spawn(async move { let _ = tx.send(Command::SkipBackward(10.0)).await; });
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::SkipBackward(10.0)).await;
+                });
             }
         });
 
@@ -68,7 +74,9 @@ impl Ui {
             let tx = tx_cmd.clone();
             move || {
                 let tx = tx.clone();
-                tokio::spawn(async move { let _ = tx.send(Command::SkipForward(10.0)).await; });
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::SkipForward(10.0)).await;
+                });
             }
         });
 
@@ -95,7 +103,9 @@ impl Ui {
                 if let Some(path) = path {
                     info!("Selected file: {}", path.display());
                     let tx = tx.clone();
-                    tokio::spawn(async move { let _ = tx.send(Command::LoadFile(path)).await; });
+                    tokio::spawn(async move {
+                        let _ = tx.send(Command::LoadFile(path)).await;
+                    });
                 }
             }
         });
@@ -108,7 +118,9 @@ impl Ui {
             let tx = tx_cmd.clone();
             move |volume| {
                 let tx = tx.clone();
-                tokio::spawn(async move { let _ = tx.send(Command::SetVolume(volume)).await; });
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::SetVolume(volume)).await;
+                });
             }
         });
     }
