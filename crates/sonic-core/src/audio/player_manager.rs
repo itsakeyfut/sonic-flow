@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
+use crate::audio::analysis::SpectrumData;
 use crate::audio::decoder::AudioFormatInfo;
 use crate::audio::player::Player;
 use crate::audio::traits::AudioFormat;
@@ -45,6 +46,9 @@ pub enum PlayerCommand {
     },
     GetStatus {
         response: oneshot::Sender<PlayerStatus>,
+    },
+    GetSpectrum {
+        response: oneshot::Sender<Option<SpectrumData>>,
     },
     Shutdown,
 }
@@ -144,6 +148,21 @@ impl PlayerManager {
             })
             .map_err(|_| self.dead_err("seek"))?;
         rx.await.map_err(|_| self.dead_err("seek_response"))?
+    }
+
+    /// Return the most recent spectrum analysis result, or `None` when no
+    /// track is loaded. The data is read directly from the watch channel
+    /// maintained by the `SpectrumTap` in the audio thread.
+    pub async fn get_spectrum(&self) -> Option<SpectrumData> {
+        let (tx, rx) = oneshot::channel();
+        if self
+            .command_tx
+            .send(PlayerCommand::GetSpectrum { response: tx })
+            .is_err()
+        {
+            return None;
+        }
+        rx.await.ok().flatten()
     }
 
     pub async fn get_status(&self) -> PlayerStatus {
@@ -338,6 +357,14 @@ impl PlayerManager {
                         duration,
                         format,
                     });
+                }
+
+                PlayerCommand::GetSpectrum { response } => {
+                    let data = player
+                        .as_ref()
+                        .and_then(|p| p.spectrum_rx())
+                        .map(|rx| (*rx.borrow()).clone());
+                    let _ = response.send(data);
                 }
 
                 PlayerCommand::Shutdown => {

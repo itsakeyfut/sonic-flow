@@ -34,9 +34,13 @@ export global UiState {
     in-out property <string> channels: "";
 
     // -- Visualizer -------------------------------------------------------
-    in-out property <string> visualizer-type: "Spectrum Bars";
-    in-out property <float>  visualizer-sensitivity: 1.0;
-    in-out property <float>  visualizer-smoothing: 0.5;
+    in-out property <string>  visualizer-type: "Spectrum Bars";
+    in-out property <float>   visualizer-sensitivity: 1.0;
+    in-out property <float>   visualizer-smoothing: 0.5;
+    // Frequency band magnitudes for the spectrum visualizer (0.0 – 1.0 each).
+    in-out property <[float]> spectrum-bands: [];
+    // Instantaneous peak signal level (0.0 – 1.0).
+    in-out property <float>   peak-level: 0.0;
 
     // -- Playlist ---------------------------------------------------------
     in-out property <bool> playlist-collapsed: false;

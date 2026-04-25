@@ -23,6 +23,8 @@ pub enum Event {
     },
     /// Track failed to load
     TrackLoadFailed { path: PathBuf, error: String },
+    /// Real-time spectrum analysis update (~60 fps)
+    SpectrumUpdated { bands: Vec<f32>, peak: f32 },
     /// General error
     Error(String),
 }

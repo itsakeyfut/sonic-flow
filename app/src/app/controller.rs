@@ -4,8 +4,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
-use sonic_core::MetadataExtractor;
 use sonic_core::audio::player_manager::PlayerManager;
+use sonic_core::{DEFAULT_BAND_COUNT, MetadataExtractor};
 
 use super::command::Command;
 use super::event::{Event, FormatInfo};
@@ -25,11 +25,13 @@ impl Controller {
         Ok(Self { tx_event, player })
     }
 
-    /// Main loop: process commands and send periodic status updates.
+    /// Main loop: process commands and send periodic status/spectrum updates.
     pub async fn run(self, mut rx_cmd: mpsc::Receiver<Command>) {
         info!("Controller started");
 
         let mut status_interval = tokio::time::interval(Duration::from_millis(100));
+        // ~60fps for spectrum; watch channel gives us the latest FFT result each tick.
+        let mut spectrum_interval = tokio::time::interval(Duration::from_millis(16));
 
         loop {
             tokio::select! {
@@ -41,6 +43,9 @@ impl Controller {
                 }
                 _ = status_interval.tick() => {
                     self.send_status().await;
+                }
+                _ = spectrum_interval.tick() => {
+                    self.send_spectrum().await;
                 }
             }
         }
@@ -141,6 +146,44 @@ impl Controller {
                         let _ = self.tx_event.send(Event::Error(e.to_string())).await;
                     }
                 }
+            }
+        }
+    }
+
+    async fn send_spectrum(&self) {
+        use std::time::Duration as StdDuration;
+        let stale_threshold = StdDuration::from_millis(200);
+
+        match self.player.get_spectrum().await {
+            Some(data) if data.is_recent(stale_threshold) => {
+                let _ = self
+                    .tx_event
+                    .send(Event::SpectrumUpdated {
+                        bands: data.bands,
+                        peak: data.peak_level,
+                    })
+                    .await;
+            }
+            Some(data) => {
+                // Data is stale (playback stopped); fade to zero.
+                let n = data.bands.len();
+                let _ = self
+                    .tx_event
+                    .send(Event::SpectrumUpdated {
+                        bands: vec![0.0; n],
+                        peak: 0.0,
+                    })
+                    .await;
+            }
+            None => {
+                // No track loaded.
+                let _ = self
+                    .tx_event
+                    .send(Event::SpectrumUpdated {
+                        bands: vec![0.0; DEFAULT_BAND_COUNT],
+                        peak: 0.0,
+                    })
+                    .await;
             }
         }
     }
