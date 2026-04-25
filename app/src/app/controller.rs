@@ -4,6 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
+use sonic_core::MetadataExtractor;
 use sonic_core::audio::player_manager::PlayerManager;
 
 use super::command::Command;
@@ -53,7 +54,19 @@ impl Controller {
         match cmd {
             Command::LoadFile(path) => match self.player.load_and_play(path.clone()).await {
                 Ok(()) => {
-                    let _ = self.tx_event.send(Event::TrackLoaded { path }).await;
+                    let meta_path = path.clone();
+                    let metadata = tokio::task::spawn_blocking(move || {
+                        MetadataExtractor::extract_with_fallback(&meta_path)
+                    })
+                    .await
+                    .unwrap_or_default();
+                    let _ = self
+                        .tx_event
+                        .send(Event::TrackLoaded {
+                            path,
+                            metadata: Box::new(metadata),
+                        })
+                        .await;
                 }
                 Err(e) => {
                     let error = e.to_string();

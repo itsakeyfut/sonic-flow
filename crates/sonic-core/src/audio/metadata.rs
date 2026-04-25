@@ -89,6 +89,22 @@ pub enum ArtworkType {
 pub struct MetadataExtractor;
 
 impl MetadataExtractor {
+    /// Extract metadata, applying a filename-based title fallback when tags are absent.
+    ///
+    /// Never returns an error — extraction failures produce a `TrackMetadata::default()`
+    /// with only the title populated from the file stem.
+    pub fn extract_with_fallback(path: &Path) -> TrackMetadata {
+        let mut meta = Self::extract_metadata(path).unwrap_or_default();
+        if meta.title.is_none() {
+            meta.title = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some("Unknown Track".to_string()));
+        }
+        meta
+    }
+
     /// Extract metadata from an audio file
     pub fn extract_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
         let extension = path
@@ -285,36 +301,36 @@ impl MetadataExtractor {
         Ok(metadata)
     }
 
-    /// Extract OGG Vorbis metadata
-    fn extract_ogg_metadata(_path: &Path) -> Result<TrackMetadata, AudioError> {
-        // Placeholder for OGG Vorbis metadata extraction
-        // Would use lewton or similar crate
-        Ok(TrackMetadata::default())
+    /// Extract OGG Vorbis metadata via Symphonia (reads Vorbis Comments).
+    fn extract_ogg_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
+        Self::extract_generic_metadata(path)
     }
 
-    /// Extract M4A/AAC metadata
-    fn extract_m4a_metadata(_path: &Path) -> Result<TrackMetadata, AudioError> {
-        // Placeholder for M4A metadata extraction
-        // Would use mp4parse or similar crate
-        Ok(TrackMetadata::default())
+    /// Extract M4A/AAC metadata via Symphonia (reads iTunes atoms).
+    fn extract_m4a_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
+        Self::extract_generic_metadata(path)
     }
 
-    /// Extract metadata using Symphonia (fallback)
+    /// Extract metadata using Symphonia's unified tag API.
+    ///
+    /// Handles all formats supported by Symphonia: OGG Vorbis, FLAC (when id3
+    /// is unavailable), M4A, OPUS, and any other probed container. Prefers
+    /// `StandardTagKey` variants for robust cross-format matching, then falls
+    /// back to raw string keys (e.g. Vorbis Comment uppercase keys).
     fn extract_generic_metadata(path: &Path) -> Result<TrackMetadata, AudioError> {
         use symphonia::core::formats::FormatOptions;
         use symphonia::core::io::MediaSourceStream;
-        use symphonia::core::meta::MetadataOptions;
+        use symphonia::core::meta::{MetadataOptions, StandardTagKey};
         use symphonia::core::probe::Hint;
 
         let file = std::fs::File::open(path)
             .map_err(|e| AudioError::Metadata(format!("Failed to open file: {}", e)))?;
 
-        let source = Box::new(file);
-        let mss = MediaSourceStream::new(source, Default::default());
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
         let mut hint = Hint::new();
-        if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
-            hint.with_extension(extension);
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            hint.with_extension(ext);
         }
 
         let mut probed = symphonia::default::get_probe()
@@ -328,26 +344,63 @@ impl MetadataExtractor {
 
         let mut metadata = TrackMetadata::default();
 
-        // Extract metadata from Symphonia
-        if let Some(symphonia_metadata) = probed.metadata.get()
-            && let Some(current) = symphonia_metadata.current()
+        let meta_src = probed
+            .metadata
+            .get()
+            .or_else(|| Some(probed.format.metadata()));
+
+        if let Some(meta_log) = meta_src
+            && let Some(current) = meta_log.current()
         {
             for tag in current.tags() {
-                match tag.key.as_str() {
-                    "TITLE" => metadata.title = Some(tag.value.to_string()),
-                    "ARTIST" => metadata.artist = Some(tag.value.to_string()),
-                    "ALBUM" => metadata.album = Some(tag.value.to_string()),
-                    "DATE" => metadata.year = tag.value.to_string().parse().ok(),
-                    "TRACK" => metadata.track_number = tag.value.to_string().parse().ok(),
-                    "GENRE" => metadata.genre = Some(tag.value.to_string()),
-                    _ => {
-                        metadata
-                            .custom_tags
-                            .insert(tag.key.clone(), tag.value.to_string());
+                let value = tag.value.to_string();
+                if let Some(std_key) = tag.std_key {
+                    match std_key {
+                        StandardTagKey::TrackTitle => metadata.title = Some(value),
+                        StandardTagKey::Artist => metadata.artist = Some(value),
+                        StandardTagKey::Album => metadata.album = Some(value),
+                        StandardTagKey::AlbumArtist => {
+                            metadata.album_artist = Some(value);
+                        }
+                        StandardTagKey::Date => metadata.year = value.parse().ok(),
+                        StandardTagKey::TrackNumber => {
+                            metadata.track_number = value.parse().ok();
+                        }
+                        StandardTagKey::Genre => metadata.genre = Some(value),
+                        StandardTagKey::Composer => metadata.composer = Some(value),
+                        StandardTagKey::Comment => metadata.comment = Some(value),
+                        _ => {
+                            metadata.custom_tags.insert(tag.key.clone(), value);
+                        }
+                    }
+                } else {
+                    match tag.key.to_uppercase().as_str() {
+                        "TITLE" => metadata.title = Some(value),
+                        "ARTIST" => metadata.artist = Some(value),
+                        "ALBUM" => metadata.album = Some(value),
+                        "ALBUMARTIST" => metadata.album_artist = Some(value),
+                        "DATE" | "YEAR" => metadata.year = value.parse().ok(),
+                        "TRACKNUMBER" | "TRACK" => {
+                            metadata.track_number = value.parse().ok();
+                        }
+                        "GENRE" => metadata.genre = Some(value),
+                        "COMPOSER" => metadata.composer = Some(value),
+                        "COMMENT" => metadata.comment = Some(value),
+                        _ => {
+                            metadata.custom_tags.insert(tag.key.clone(), value);
+                        }
                     }
                 }
             }
         }
+
+        let file_info = std::fs::metadata(path)
+            .map_err(|e| AudioError::Metadata(format!("Failed to get file info: {}", e)))?;
+        metadata.file_size = Some(file_info.len());
+        metadata.format = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_uppercase());
 
         Ok(metadata)
     }
