@@ -51,21 +51,19 @@ impl Controller {
         debug!("Processing command: {:?}", cmd);
 
         match cmd {
-            Command::LoadFile(path) => {
-                match self.player.load_and_play(path.clone()).await {
-                    Ok(()) => {
-                        let _ = self.tx_event.send(Event::TrackLoaded { path }).await;
-                    }
-                    Err(e) => {
-                        let error = e.to_string();
-                        error!("Failed to load track: {}", error);
-                        let _ = self
-                            .tx_event
-                            .send(Event::TrackLoadFailed { path, error })
-                            .await;
-                    }
+            Command::LoadFile(path) => match self.player.load_and_play(path.clone()).await {
+                Ok(()) => {
+                    let _ = self.tx_event.send(Event::TrackLoaded { path }).await;
                 }
-            }
+                Err(e) => {
+                    let error = e.to_string();
+                    error!("Failed to load track: {}", error);
+                    let _ = self
+                        .tx_event
+                        .send(Event::TrackLoadFailed { path, error })
+                        .await;
+                }
+            },
             Command::TogglePlayback => {
                 let status = self.player.get_status().await;
                 let result = if status.is_playing {
@@ -87,13 +85,49 @@ impl Controller {
                     let _ = self.tx_event.send(Event::Error(e.to_string())).await;
                 }
             }
+            Command::Seek(position) => match self.player.seek(position).await {
+                Ok(actual) => {
+                    debug!("Seeked to {:?} (requested {:?})", actual, position);
+                    self.send_status().await;
+                }
+                Err(e) => {
+                    let _ = self.tx_event.send(Event::Error(e.to_string())).await;
+                }
+            },
             Command::SkipForward(seconds) => {
-                info!("Skip forward {} seconds", seconds);
-                // TODO: implement seeking
+                let status = self.player.get_status().await;
+                let offset = Duration::from_secs_f64(seconds);
+                let target = status.position.saturating_add(offset);
+                // Clamp to track duration when known.
+                let target = match status.duration {
+                    Some(d) => target.min(d),
+                    None => target,
+                };
+                info!("Skip forward {}s → {:?}", seconds, target);
+                match self.player.seek(target).await {
+                    Ok(actual) => {
+                        debug!("Skip forward seeked to {:?}", actual);
+                        self.send_status().await;
+                    }
+                    Err(e) => {
+                        let _ = self.tx_event.send(Event::Error(e.to_string())).await;
+                    }
+                }
             }
             Command::SkipBackward(seconds) => {
-                info!("Skip backward {} seconds", seconds);
-                // TODO: implement seeking
+                let status = self.player.get_status().await;
+                let offset = Duration::from_secs_f64(seconds);
+                let target = status.position.saturating_sub(offset);
+                info!("Skip backward {}s → {:?}", seconds, target);
+                match self.player.seek(target).await {
+                    Ok(actual) => {
+                        debug!("Skip backward seeked to {:?}", actual);
+                        self.send_status().await;
+                    }
+                    Err(e) => {
+                        let _ = self.tx_event.send(Event::Error(e.to_string())).await;
+                    }
+                }
             }
         }
     }
