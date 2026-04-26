@@ -143,17 +143,13 @@ impl SpectrumAnalyzer {
         self.logarithmic_spacing = logarithmic;
     }
 
-    /// Analyze audio samples and return spectrum data
+    /// Analyze audio samples and return spectrum data.
     ///
-    /// # Arguments
-    ///
-    /// * `samples` - Audio samples to analyze (mono)
-    ///
-    /// # Returns
-    ///
-    /// Spectrum data with frequency bands
-    pub fn analyze(&mut self, samples: &[f32]) -> SpectrumData {
-        // Add samples to overlap buffer
+    /// Returns `None` when the internal overlap buffer has not yet accumulated
+    /// enough samples to trigger an FFT window. Returns `Some` whenever at
+    /// least one FFT window has been processed, so callers can avoid
+    /// overwriting a previous real result with stale zeros.
+    pub fn analyze(&mut self, samples: &[f32]) -> Option<SpectrumData> {
         for &sample in samples {
             self.overlap_buffer.push_back(sample);
         }
@@ -161,55 +157,44 @@ impl SpectrumAnalyzer {
         let mut all_bands = Vec::new();
         let hop_size = (self.fft_size as f32 * (1.0 - self.overlap_ratio)) as usize;
 
-        // Process overlapping windows
         while self.overlap_buffer.len() >= self.fft_size {
-            // Fill input buffer with windowed samples
             for (i, sample) in self.overlap_buffer.iter().take(self.fft_size).enumerate() {
                 let windowed_sample = sample * self.window[i];
                 self.input_buffer[i] = Complex::new(windowed_sample, 0.0);
             }
 
-            // Remove processed samples (hop size)
             for _ in 0..hop_size.min(self.overlap_buffer.len()) {
                 self.overlap_buffer.pop_front();
             }
 
-            // Perform FFT
             self.output_buffer.copy_from_slice(&self.input_buffer);
             self.fft.process(&mut self.output_buffer);
 
-            // Convert to magnitude spectrum
             let magnitude_spectrum = self.compute_magnitude_spectrum();
-
-            // Convert to frequency bands
             let bands = self.spectrum_to_bands(&magnitude_spectrum);
             all_bands.extend(bands);
         }
 
-        // Average overlapping results
-        let final_bands = if all_bands.is_empty() {
-            vec![0.0; self.output_bands]
-        } else {
-            let num_windows = all_bands.len() / self.output_bands;
-            let mut averaged_bands = vec![0.0; self.output_bands];
+        // No FFT window fired — caller should keep the previous result.
+        if all_bands.is_empty() {
+            return None;
+        }
 
-            for (i, &value) in all_bands.iter().enumerate() {
-                averaged_bands[i % self.output_bands] += value;
+        let num_windows = all_bands.len() / self.output_bands;
+        let mut averaged_bands = vec![0.0; self.output_bands];
+
+        for (i, &value) in all_bands.iter().enumerate() {
+            averaged_bands[i % self.output_bands] += value;
+        }
+
+        if num_windows > 0 {
+            for band in &mut averaged_bands {
+                *band /= num_windows as f32;
             }
+        }
 
-            if num_windows > 0 {
-                for band in &mut averaged_bands {
-                    *band /= num_windows as f32;
-                }
-            }
-
-            averaged_bands
-        };
-
-        // Calculate peak and RMS levels from original samples
         let (peak_level, rms_level) = self.calculate_levels(samples);
-
-        SpectrumData::new(final_bands, peak_level, rms_level)
+        Some(SpectrumData::new(averaged_bands, peak_level, rms_level))
     }
 
     /// Generate window function coefficients
@@ -436,18 +421,19 @@ mod tests {
             .map(|i| (2.0 * PI * frequency * i as f32 / sample_rate).sin())
             .collect();
 
-        let spectrum_data = analyzer.analyze(&samples);
+        let spectrum_data = analyzer
+            .analyze(&samples)
+            .expect("FFT should fire with 2048 samples");
 
         assert_eq!(spectrum_data.bands.len(), 32);
         assert!(spectrum_data.peak_level > 0.8); // Should detect significant signal
         assert!(spectrum_data.rms_level > 0.5);
 
-        // The 1kHz signal should create a peak in one of the frequency bands
         let max_band = spectrum_data
             .bands
             .iter()
             .fold(0.0f32, |acc, &x| acc.max(x));
-        assert!(max_band > 0.1); // Should have significant energy in some band
+        assert!(max_band > 0.1);
     }
 
     #[test]
@@ -455,13 +441,14 @@ mod tests {
         let mut analyzer = SpectrumAnalyzer::new(1024, 44100, 32);
         let samples = vec![0.0; 2048]; // Silence
 
-        let spectrum_data = analyzer.analyze(&samples);
+        let spectrum_data = analyzer
+            .analyze(&samples)
+            .expect("FFT should fire with 2048 samples");
 
         assert_eq!(spectrum_data.bands.len(), 32);
         assert_eq!(spectrum_data.peak_level, 0.0);
         assert_eq!(spectrum_data.rms_level, 0.0);
 
-        // All bands should be zero for silence
         for &band in &spectrum_data.bands {
             assert_eq!(band, 0.0);
         }
@@ -532,7 +519,9 @@ mod tests {
 
         // Analyzing silence after reset should give clean results
         let silence = vec![0.0; 1024];
-        let spectrum_data = analyzer.analyze(&silence);
+        let spectrum_data = analyzer
+            .analyze(&silence)
+            .expect("FFT should fire with 1024 samples");
 
         assert_eq!(spectrum_data.peak_level, 0.0);
         assert_eq!(spectrum_data.rms_level, 0.0);

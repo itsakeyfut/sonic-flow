@@ -90,10 +90,12 @@ export component AppWindow inherits Window {
         padding: 20px;
         spacing: 20px;
 
-        // Main content area
+        // Main content area — vertical-stretch: 1 lets Slint give it the
+        // remaining height after PlayerControls claims its fixed 90px.
         HorizontalBox {
             spacing: 20px;
             horizontal-stretch: 1;
+            vertical-stretch: 1;
 
             // Left panel - Playlist
             PlaylistView {

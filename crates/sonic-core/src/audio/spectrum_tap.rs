@@ -86,9 +86,11 @@ impl<S: Source<Item = f32>> Iterator for SpectrumTap<S> {
             self.frame_ch = 0;
 
             if self.mono_buf.len() >= HOP_MONO_SAMPLES {
-                let data = self.analyzer.analyze(&self.mono_buf);
-                // Best-effort: drop the result if no receiver is listening.
-                let _ = self.tx.send(data);
+                // Only publish when FFT actually fired; otherwise the previous
+                // real result stays in the watch channel until the next window.
+                if let Some(data) = self.analyzer.analyze(&self.mono_buf) {
+                    let _ = self.tx.send(data);
+                }
                 self.mono_buf.clear();
             }
         }
