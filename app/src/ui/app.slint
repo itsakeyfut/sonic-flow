@@ -121,6 +121,8 @@ export component AppWindow inherits Window {
                 is-playing:      UiState.is-playing;
                 sensitivity:     UiState.visualizer-sensitivity;
                 smoothing:       UiState.visualizer-smoothing;
+                spectrum-data:   UiState.spectrum-bands;
+                peak-level:      UiState.peak-level;
 
                 visualizer-changed(t)   => { UiState.visualizer-changed(t); }
                 sensitivity-changed(v)  => { UiState.visualizer-sensitivity-changed(v); }
