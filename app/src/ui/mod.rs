@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Global};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
 use crate::app::{Command, Event};
-use crate::{AppWindow, UiState};
+use crate::{AppWindow, PlaylistTrack, UiState};
 
 /// Main UI wrapper. Creates the Slint window, registers callbacks,
 /// and spawns the event handler task.
@@ -25,7 +25,7 @@ impl Ui {
         Self::register_file_callbacks(&ui, &tx_cmd);
         Self::register_volume_callbacks(&ui, &tx_cmd);
         Self::register_visualizer_callbacks(&ui);
-        Self::register_playlist_callbacks(&ui);
+        Self::register_playlist_callbacks(&ui, &tx_cmd);
         Self::spawn_event_handler(&window, rx_event);
 
         info!("UI initialized");
@@ -80,12 +80,49 @@ impl Ui {
             }
         });
 
+        ui.on_next_track({
+            let tx = tx_cmd.clone();
+            move || {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::NextTrack).await;
+                });
+            }
+        });
+
+        ui.on_previous_track({
+            let tx = tx_cmd.clone();
+            move || {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::PreviousTrack).await;
+                });
+            }
+        });
+
+        ui.on_shuffle_toggled({
+            let tx = tx_cmd.clone();
+            move || {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::ToggleShuffle).await;
+                });
+            }
+        });
+
+        ui.on_repeat_toggled({
+            let tx = tx_cmd.clone();
+            move || {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::CycleRepeat).await;
+                });
+            }
+        });
+
         ui.on_seek(|_position| {
             debug!("Seek requested (not yet implemented)");
         });
-
-        ui.on_next_track(|| debug!("Next track (not yet implemented)"));
-        ui.on_previous_track(|| debug!("Previous track (not yet implemented)"));
     }
 
     // -- File callbacks ---------------------------------------------------
@@ -94,17 +131,17 @@ impl Ui {
         ui.on_load_track_clicked({
             let tx = tx_cmd.clone();
             move || {
-                let path = rfd::FileDialog::new()
+                let paths = rfd::FileDialog::new()
                     .add_filter("Audio Files", &["mp3", "flac", "wav", "ogg", "m4a", "aac"])
                     .add_filter("All Files", &["*"])
-                    .set_title("Select Audio File")
-                    .pick_file();
+                    .set_title("Select Audio File(s)")
+                    .pick_files();
 
-                if let Some(path) = path {
-                    info!("Selected file: {}", path.display());
+                if let Some(paths) = paths {
+                    info!("Selected {} file(s) via load-track", paths.len());
                     let tx = tx.clone();
                     tokio::spawn(async move {
-                        let _ = tx.send(Command::LoadFile(path)).await;
+                        let _ = tx.send(Command::AddTracks(paths)).await;
                     });
                 }
             }
@@ -135,18 +172,86 @@ impl Ui {
         ui.on_fullscreen_toggled(|| debug!("Fullscreen toggled"));
     }
 
-    // -- Playlist callbacks (stubs) ---------------------------------------
+    // -- Playlist callbacks -----------------------------------------------
 
-    fn register_playlist_callbacks(ui: &UiState) {
-        ui.on_shuffle_toggled(|| debug!("Shuffle toggled"));
-        ui.on_repeat_toggled(|| debug!("Repeat toggled"));
-        ui.on_playlist_toggle_collapsed(|| debug!("Playlist toggle collapsed"));
-        ui.on_playlist_track_selected(|i| debug!("Playlist track selected: {}", i));
-        ui.on_playlist_track_removed(|i| debug!("Playlist track removed: {}", i));
-        ui.on_playlist_load_files(|| debug!("Playlist load files"));
-        ui.on_playlist_load_folder(|| debug!("Playlist load folder"));
-        ui.on_playlist_save(|| debug!("Playlist save"));
-        ui.on_playlist_clear(|| debug!("Playlist clear"));
+    fn register_playlist_callbacks(ui: &UiState, tx_cmd: &mpsc::Sender<Command>) {
+        ui.on_playlist_toggle_collapsed({
+            let ui_weak = ui.as_weak();
+            move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let collapsed: bool = ui.get_playlist_collapsed();
+                    ui.set_playlist_collapsed(!collapsed);
+                }
+            }
+        });
+
+        ui.on_playlist_track_selected({
+            let tx = tx_cmd.clone();
+            move |i| {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::SelectTrack(i as usize)).await;
+                });
+            }
+        });
+
+        ui.on_playlist_track_removed({
+            let tx = tx_cmd.clone();
+            move |i| {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::RemoveTrack(i as usize)).await;
+                });
+            }
+        });
+
+        ui.on_playlist_clear({
+            let tx = tx_cmd.clone();
+            move || {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Command::ClearPlaylist).await;
+                });
+            }
+        });
+
+        ui.on_playlist_load_files({
+            let tx = tx_cmd.clone();
+            move || {
+                let paths = rfd::FileDialog::new()
+                    .add_filter("Audio Files", &["mp3", "flac", "wav", "ogg", "m4a", "aac"])
+                    .add_filter("All Files", &["*"])
+                    .set_title("Add Audio Files")
+                    .pick_files();
+
+                if let Some(paths) = paths {
+                    info!("Adding {} file(s) to playlist", paths.len());
+                    let tx = tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx.send(Command::AddTracks(paths)).await;
+                    });
+                }
+            }
+        });
+
+        ui.on_playlist_load_folder({
+            let tx = tx_cmd.clone();
+            move || {
+                let folder = rfd::FileDialog::new()
+                    .set_title("Add Music Folder")
+                    .pick_folder();
+
+                if let Some(folder) = folder {
+                    info!("Adding folder to playlist: {}", folder.display());
+                    let tx = tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx.send(Command::AddFolder(folder)).await;
+                    });
+                }
+            }
+        });
+
+        ui.on_playlist_save(|| debug!("Playlist save (not yet implemented)"));
         ui.on_playlist_folder_selected(|p| debug!("Playlist folder: {}", p));
         ui.on_playlist_file_selected(|p| debug!("Playlist file: {}", p));
     }
@@ -215,7 +320,6 @@ impl Ui {
                     }
                     None => {
                         ui.set_current_track("No track loaded".into());
-                        // Clear metadata when no track is loaded.
                         ui.set_track_title("".into());
                         ui.set_track_artist("".into());
                         ui.set_track_album("".into());
@@ -255,6 +359,26 @@ impl Ui {
                 let model = slint::ModelRc::new(slint::VecModel::from(bands));
                 ui.set_spectrum_bands(model);
                 ui.set_peak_level(peak);
+            }
+
+            Event::PlaylistUpdated {
+                tracks,
+                current_index,
+                total_duration,
+            } => {
+                let items: Vec<PlaylistTrack> = tracks
+                    .iter()
+                    .map(|t| PlaylistTrack {
+                        title: t.title.clone().into(),
+                        artist: t.artist.clone().into(),
+                        duration: t.duration.map(format_duration).unwrap_or_default().into(),
+                    })
+                    .collect();
+                let model = slint::ModelRc::new(slint::VecModel::from(items));
+                ui.set_playlist_items(model);
+                ui.set_total_tracks(tracks.len() as i32);
+                ui.set_current_track_index(current_index.map(|i| i as i32).unwrap_or(-1));
+                ui.set_total_duration(format_duration(total_duration).into());
             }
 
             Event::Error(msg) => {

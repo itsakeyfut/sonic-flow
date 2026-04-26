@@ -1,5 +1,5 @@
 import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { ColorTheme } from "components/common.slint";
+import { ColorTheme, PlaylistTrack } from "components/common.slint";
 import { PlayerControls } from "components/player_controls.slint";
 import { VisualizerCanvas } from "components/visualizer_canvas.slint";
 import { NowPlayingInfo } from "components/track_info.slint";
@@ -47,6 +47,7 @@ export global UiState {
     in-out property <int>  current-track-index: -1;
     in-out property <int>  total-tracks: 0;
     in-out property <string> total-duration: "00:00";
+    in-out property <[PlaylistTrack]> playlist-items: [];
 
     // -- Transport callbacks (UI -> Rust) ---------------------------------
     callback play-pause-clicked();
@@ -108,16 +109,15 @@ export component AppWindow inherits Window {
                 is-playing: UiState.is-playing;
                 total-tracks: UiState.total-tracks;
                 total-duration: UiState.total-duration;
+                playlist-items: UiState.playlist-items;
 
-                toggle-collapsed   => { UiState.playlist-toggle-collapsed(); }
-                track-selected(i)  => { UiState.playlist-track-selected(i); }
-                track-removed(i)   => { UiState.playlist-track-removed(i); }
-                clear-playlist     => { UiState.playlist-clear(); }
-                load-folder        => { UiState.playlist-load-folder(); }
-                load-files         => { UiState.playlist-load-files(); }
-                save-playlist      => { UiState.playlist-save(); }
-                folder-selected(p) => { UiState.playlist-folder-selected(p); }
-                file-selected(p)   => { UiState.playlist-file-selected(p); }
+                toggle-collapsed  => { UiState.playlist-toggle-collapsed(); }
+                track-selected(i) => { UiState.playlist-track-selected(i); }
+                track-removed(i)  => { UiState.playlist-track-removed(i); }
+                clear-playlist    => { UiState.playlist-clear(); }
+                load-folder       => { UiState.playlist-load-folder(); }
+                load-files        => { UiState.playlist-load-files(); }
+                save-playlist     => { UiState.playlist-save(); }
             }
 
             // Center panel - Visualizer
