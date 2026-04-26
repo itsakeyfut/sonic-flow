@@ -1,5 +1,5 @@
 import { Button, ScrollView, ListView, VerticalBox, HorizontalBox, LineEdit } from "std-widgets.slint";
-import { ColorTheme, StyledButton, GlowText, Panel } from "common.slint";
+import { ColorTheme, StyledButton, GlowText, Panel, PlaylistTrack } from "common.slint";
 
 // プレイリストアイテム
 component PlaylistItem inherits Rectangle {
@@ -107,56 +107,6 @@ component PlaylistItem inherits Rectangle {
     }
 }
 
-// フォルダブラウザー
-component FolderBrowser inherits VerticalBox {
-    in property <[string]> folder-contents: [];
-    callback folder-selected(string);
-    callback file-selected(string);
-    
-    spacing: ColorTheme.spacing-small;
-    
-    GlowText {
-        text: "Browse Folders";
-        color: ColorTheme.text-secondary;
-        font-size: ColorTheme.font-size-small;
-        font-weight: 700;
-    }
-    
-    ScrollView {
-        height: 150px;
-        
-        VerticalBox {
-            spacing: 2px;
-            
-            for item in folder-contents: Rectangle {
-                height: 30px;
-                background: mouse-area.has-hover ? ColorTheme.surface-variant : transparent;
-                border-radius: ColorTheme.border-radius-small;
-                
-                mouse-area := TouchArea {
-                    clicked => {
-                        // 簡易的なフォルダ判定（最初の文字）
-                        root.file-selected(item);
-                    }
-                }
-                
-                HorizontalBox {
-                    padding: 8px;
-                    spacing: ColorTheme.spacing-small;
-                    
-                    GlowText {
-                        text: item;
-                        color: ColorTheme.text-secondary;
-                        font-size: ColorTheme.font-size-small;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                }
-            }
-        }
-    }
-}
-
 // プレイリストビュー
 export component PlaylistView inherits Panel {
     in-out property <bool> is-collapsed: false;
@@ -165,25 +115,7 @@ export component PlaylistView inherits Panel {
     in-out property <string> total-duration: "0:00";
     in-out property <int> current-track-index: -1;
     in-out property <bool> is-playing: false;
-    
-    // プレイリスト項目（例のデータ）
-    in-out property <[{title: string, artist: string, duration: string}]> playlist-items: [
-        {title: "Sample Track 1", artist: "Artist 1", duration: "3:45"},
-        {title: "Sample Track 2", artist: "Artist 2", duration: "4:12"},
-        {title: "Sample Track 3", artist: "Artist 3", duration: "2:58"},
-        {title: "Sample Track 4", artist: "Artist 4", duration: "5:23"},
-        {title: "Sample Track 5", artist: "Artist 5", duration: "3:31"},
-    ];
-    
-    // フォルダブラウジング用
-    in-out property <[string]> folder-contents: [
-        "📁 Music",
-        "📁 Albums", 
-        "📁 Artists",
-        "🎵 demo.mp3",
-        "🎵 sample.flac",
-        "🎵 test.wav"
-    ];
+    in-out property <[PlaylistTrack]> playlist-items: [];
     
     // コールバック
     callback toggle-collapsed();
@@ -349,17 +281,6 @@ export component PlaylistView inherits Panel {
                 }
             }
             
-            Rectangle {
-                height: 1px;
-                background: ColorTheme.border;
-            }
-            
-            // フォルダブラウザー
-            FolderBrowser {
-                folder-contents: root.folder-contents;
-                folder-selected(path) => { root.folder-selected(path); }
-                file-selected(path) => { root.file-selected(path); }
-            }
         }
         
         if root.is-collapsed: VerticalBox {

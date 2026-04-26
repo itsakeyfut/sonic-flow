@@ -25,8 +25,23 @@ pub enum Event {
     TrackLoadFailed { path: PathBuf, error: String },
     /// Real-time spectrum analysis update (~60 fps)
     SpectrumUpdated { bands: Vec<f32>, peak: f32 },
+    /// Playlist contents changed (tracks added/removed/reordered) or current
+    /// index changed (next/prev/select).
+    PlaylistUpdated {
+        tracks: Vec<TrackSummary>,
+        current_index: Option<usize>,
+        total_duration: Duration,
+    },
     /// General error
     Error(String),
+}
+
+/// Lightweight track description for playlist display.
+#[derive(Debug, Clone)]
+pub struct TrackSummary {
+    pub title: String,
+    pub artist: String,
+    pub duration: Option<Duration>,
 }
 
 /// Audio format information for display
