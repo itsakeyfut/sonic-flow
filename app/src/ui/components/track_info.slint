@@ -354,10 +354,8 @@ export component NowPlayingInfo inherits Panel {
             channels: root.channels;
         }
 
-        Rectangle { vertical-stretch: 1; }
-
-        // トラック統計（将来的な拡張用）
-        if root.is-playing: VerticalBox {
+        // トラック統計
+        if root.file-format != "": VerticalBox {
             spacing: 6px;
             
             GlowText {
