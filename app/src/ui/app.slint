@@ -90,10 +90,16 @@ export component AppWindow inherits Window {
         padding: 20px;
         spacing: 20px;
 
-        // Main content area
+        // Clip wrapper: ensures NowPlayingInfo overflow never pushes
+        // PlayerControls off-screen.
+        Rectangle {
+            vertical-stretch: 1;
+            clip: true;
+
         HorizontalBox {
             spacing: 20px;
-            horizontal-stretch: 1;
+            width: parent.width;
+            height: parent.height;
 
             // Left panel - Playlist
             PlaylistView {
@@ -121,6 +127,8 @@ export component AppWindow inherits Window {
                 is-playing:      UiState.is-playing;
                 sensitivity:     UiState.visualizer-sensitivity;
                 smoothing:       UiState.visualizer-smoothing;
+                spectrum-data:   UiState.spectrum-bands;
+                peak-level:      UiState.peak-level;
 
                 visualizer-changed(t)   => { UiState.visualizer-changed(t); }
                 sensitivity-changed(v)  => { UiState.visualizer-sensitivity-changed(v); }
@@ -149,7 +157,8 @@ export component AppWindow inherits Window {
                 bitrate:        UiState.bitrate;
                 channels:       UiState.channels;
             }
-        }
+        } // HorizontalBox
+        } // clip Rectangle
 
         // Bottom control bar
         PlayerControls {
