@@ -83,19 +83,23 @@ export global UiState {
 export component AppWindow inherits Window {
     title: "Sonic Flow";
     width: 1400px;
-    height: 750px;
+    height: 600px;
     background: ColorTheme.background;
 
     VerticalBox {
         padding: 20px;
         spacing: 20px;
 
-        // Main content area — vertical-stretch: 1 lets Slint give it the
-        // remaining height after PlayerControls claims its fixed 90px.
+        // Clip wrapper: ensures NowPlayingInfo overflow never pushes
+        // PlayerControls off-screen.
+        Rectangle {
+            vertical-stretch: 1;
+            clip: true;
+
         HorizontalBox {
             spacing: 20px;
-            horizontal-stretch: 1;
-            vertical-stretch: 1;
+            width: parent.width;
+            height: parent.height;
 
             // Left panel - Playlist
             PlaylistView {
@@ -153,7 +157,8 @@ export component AppWindow inherits Window {
                 bitrate:        UiState.bitrate;
                 channels:       UiState.channels;
             }
-        }
+        } // HorizontalBox
+        } // clip Rectangle
 
         // Bottom control bar
         PlayerControls {
